@@ -1,0 +1,20 @@
+Building Type,Refrigeration_Low,Refrigeration_Avg,Refrigeration_High,Occupancy_Low,Occupancy_Avg,Occupancy_High,Electrical_Low,Electrical_Avg,Electrical_High,Supply_ESW_Low,Supply_ESW_Avg,Supply_ESW_High,Supply_North_Low,Supply_North_Avg,Supply_North_High,InternalCFM_Low,InternalCFM_Avg,InternalCFM_High
+"Apartment, High Rise",450,400,350,325,175,100,0.7,0.9,1.1,0.8,1.2,1.7,0.5,0.8,1.3,,1.0,2.0
+"Auditoriums, Churches, Theaters",400,250,90,15,11,6,0.5,0.7,0.9,,,,,,,1.0,2.0,3.0
+Educational Facilities,240,185,150,30,25,20,0.75,1.0,1.1,1.0,1.6,2.2,0.9,1.3,2.0,0.8,1.2,1.9
+"Schools, Colleges, Universities",240,150,90,50,35,23,2.5,4.0,5.5,,,,,,,2.0,3.6,5.5
+Light Manufacturing,200,150,100,200,150,100,7.5,9.0,11.0,,,,,,,1.6,2.5,3.8
+Heavy Manufacturing,100,80,60,200,250,300,12.0,25.0,30.0,,,,,,,2.5,4.0,6.5
+Hospitals - Patient Rooms,275,220,165,70,50,25,0.5,0.75,1.0,1.0,1.5,2.0,0.8,1.2,1.4,0.7,1.0,1.3
+Hospitals - Public Areas,175,140,110,100,80,50,0.5,0.75,1.0,1.0,1.25,1.45,1.0,1.1,1.2,0.95,1.0,1.1
+"Hotels, Motels, Dormitories",350,300,220,200,150,100,0.5,0.75,1.0,1.0,1.4,1.5,0.9,1.2,1.4,,,
+Libraries and Museums,340,280,200,80,60,40,0.5,0.75,1.0,1.0,1.6,2.1,0.9,1.1,1.3,0.9,1.0,1.1
+Office Buildings (General),360,280,190,130,110,80,2.0,2.5,4.0,1.0,1.6,2.2,0.9,1.3,2.0,0.8,1.0,1.2
+Private Offices,,,,150,125,100,0.5,0.75,1.0,1.2,1.8,2.4,1.1,1.5,1.8,0.8,1.2,1.4
+Stenographic Department,,,,100,85,70,1.0,1.25,1.5,,,,,,,0.9,1.3,2.0
+Residential - Large,600,500,380,600,400,200,0.5,1.0,1.5,0.8,1.2,1.6,0.5,0.8,1.3,,,
+Residential - Medium,700,550,400,600,360,200,0.5,1.0,1.5,0.7,1.1,1.4,0.5,0.7,1.2,,,
+Restaurants - Large,135,100,80,17,15,13,0.5,1.0,1.5,1.8,2.4,3.7,1.2,1.6,2.1,0.9,1.1,1.4
+Restaurants - Medium,150,120,100,17,15,13,0.5,1.0,1.5,1.5,2.0,3.0,1.1,1.4,1.8,0.9,1.0,1.3
+Beauty and Barber Shops,240,160,105,45,40,25,3.0,5.0,9.0,1.5,2.6,4.2,1.1,1.7,2.6,0.9,1.3,2.0
+Malls,365,230,160,100,75,50,1.0,1.5,2.0,,,,,,,1.1,1.8,2.5
