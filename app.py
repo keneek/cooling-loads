@@ -151,6 +151,7 @@ def compute_results(
     area: float,
     level: str,
 ) -> Optional[Results]:
+    """Compute results for a given building type, area, and load level"""
     if level not in ['Low', 'Avg', 'High']:
         raise ValueError("Invalid load level")
     bd = next((b for b in validated_data if b.building_type==building_type), None)
