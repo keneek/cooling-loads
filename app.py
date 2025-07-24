@@ -125,7 +125,7 @@ selected_blds = st.sidebar.multiselect(
     default=[building_types[0]] if building_types else []
 )
 
-sq_ft: int = st.sidebar.number_input("Building Area (sq ft)", min_value=0, value=1000, step=1, format="%i")
+sq_ft: int = st.sidebar.number_input("Building Area (sq ft)", min_value=0, value=7500, step=1, format="%i")
 load_type = st.sidebar.radio("Load Type", ["Low","Avg","High"], index=1, key='selected_load')
 
 # CSV override
