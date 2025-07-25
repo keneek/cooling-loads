@@ -6,12 +6,14 @@ Uses DNS delegation - domain stays at GoDaddy but DNS is managed by Route53.
 from typing import Any
 
 import aws_cdk as cdk
+import aws_cdk.aws_certificatemanager as acm
+import aws_cdk.aws_cognito as cognito
+import aws_cdk.aws_dynamodb as dynamodb
 import aws_cdk.aws_ecs as ecs
 import aws_cdk.aws_ecs_patterns as ecs_patterns
-import aws_cdk.aws_certificatemanager as acm
 import aws_cdk.aws_route53 as route53
-
 from aws_cdk.aws_ecs_patterns import ApplicationLoadBalancedFargateService
+from aws_cdk.aws_iam import PolicyStatement
 from constructs import Construct
 
 
@@ -44,6 +46,47 @@ class StreamlitStack(cdk.Stack):
             validation=acm.CertificateValidation.from_dns(hosted_zone),
         )
 
+        # Cognito User Pool for authentication
+        user_pool = cognito.UserPool(
+            self,
+            "UserPool",
+            self_sign_up_enabled=True,
+            sign_in_aliases=cognito.SignInAliases(username=True, email=True),
+            user_verification=cognito.UserVerificationConfig(
+                email_subject="Verify your email for Cooling Loads",
+                email_body="Thanks for signing up! Your verification code is {####}",
+                email_style=cognito.VerificationEmailStyle.CODE,
+            ),
+            password_policy=cognito.PasswordPolicy(
+                min_length=8,
+                require_digits=True,
+                require_lowercase=True,
+                require_uppercase=True,
+                require_symbols=False,
+            ),
+        )
+
+        # Client for the user pool
+        user_pool_client = cognito.UserPoolClient(
+            self,
+            "UserPoolClient",
+            user_pool=user_pool,
+            auth_flows=cognito.AuthFlow(user_password=True),
+        )
+
+        # DynamoDB table for projects
+        project_table = dynamodb.Table(
+            self,
+            "CoolingProjectsTable",
+            partition_key=dynamodb.Attribute(
+                name="username", type=dynamodb.AttributeType.STRING
+            ),
+            sort_key=dynamodb.Attribute(
+                name="project_name", type=dynamodb.AttributeType.STRING
+            ),
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+        )
+
         # Create ECS Fargate service with ALB
         _fargate_service: ApplicationLoadBalancedFargateService = (
             ecs_patterns.ApplicationLoadBalancedFargateService(
@@ -58,9 +101,16 @@ class StreamlitStack(cdk.Stack):
                         "STREAMLIT_SERVER_ADDRESS": "0.0.0.0",
                         "STREAMLIT_SERVER_HEADLESS": "true",
                         "STREAMLIT_BROWSER_GATHER_USAGE_STATS": "false",
+                        "COGNITO_USER_POOL_ID": user_pool.user_pool_id,
+                        "COGNITO_CLIENT_ID": user_pool_client.user_pool_client_id,
+                        "DYNAMODB_TABLE_NAME": project_table.table_name,
                     },
                     # Enable logging
                     enable_logging=True,
+                    log_driver=ecs.LogDrivers.aws_logs(
+                        stream_prefix="Streamlit",
+                        mode=ecs.AwsLogDriverMode.NON_BLOCKING,
+                    ),
                 ),
                 memory_limit_mib=1024,
                 cpu=512,
@@ -68,8 +118,6 @@ class StreamlitStack(cdk.Stack):
                 public_load_balancer=True,
                 # Add health check configuration
                 health_check_grace_period=cdk.Duration.seconds(60),
-                # Configure ARM64 architecture to match local build
-                platform_version=ecs.FargatePlatformVersion.VERSION1_4,
                 # Domain configuration
                 domain_name=domain_name,
                 domain_zone=hosted_zone,
@@ -78,7 +126,20 @@ class StreamlitStack(cdk.Stack):
             )
         )
 
-        # Note: Docker image will be built for x86_64 architecture to match ECS Fargate default
+        # Grant ECS task role access to DynamoDB
+        project_table.grant_read_write_data(_fargate_service.task_definition.task_role)
+
+        # Grant access to Cognito
+        _fargate_service.task_definition.task_role.add_to_principal_policy(
+            PolicyStatement(
+                actions=[
+                    "cognito-idp:SignUp",
+                    "cognito-idp:ConfirmSignUp",
+                    "cognito-idp:InitiateAuth",
+                ],
+                resources=[user_pool.user_pool_arn],
+            )
+        )
 
         # Configure health check on the target group
         _fargate_service.target_group.configure_health_check(
@@ -116,6 +177,26 @@ class StreamlitStack(cdk.Stack):
             "HostedZoneId",
             value=hosted_zone.hosted_zone_id,
             description="Route53 Hosted Zone ID",
+        )
+
+        # Output Cognito details
+        cdk.CfnOutput(
+            self,
+            "UserPoolId",
+            value=user_pool.user_pool_id,
+            description="Cognito User Pool ID",
+        )
+        cdk.CfnOutput(
+            self,
+            "UserPoolClientId",
+            value=user_pool_client.user_pool_client_id,
+            description="Cognito User Pool Client ID",
+        )
+        cdk.CfnOutput(
+            self,
+            "DynamoDBTableName",
+            value=project_table.table_name,
+            description="DynamoDB Table for Projects",
         )
 
 

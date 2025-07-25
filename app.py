@@ -4,16 +4,133 @@ This app estimates cooling load for a given building type and square footage.
 """
 
 import base64
+import json
 import os
 from datetime import datetime
-from typing import List, Optional, Any
+from typing import Any, List, Optional
 
+import boto3
 import pandas as pd  # type: ignore
-import streamlit as st
-from fpdf import FPDF  # type: ignore
-from pydantic import BaseModel, Field, validate_call, model_validator, ValidationError
-
 import plotly.express as px  # Add for visualization # type: ignore
+import streamlit as st
+from boto3.dynamodb.conditions import Key
+from botocore.exceptions import ClientError
+from fpdf import FPDF  # type: ignore
+from pydantic import BaseModel, Field, ValidationError, model_validator, validate_call
+
+try:
+    from dotenv import load_dotenv
+    import os.path
+    
+    if os.path.exists('.env'):
+        load_dotenv()  # Load environment variables from .env file if it exists
+        print("✅ Loaded environment variables from .env file")
+    else:
+        print("ℹ️  No .env file found, using system environment variables")
+except ImportError:
+    print("ℹ️  python-dotenv not installed, using system environment variables")
+
+# AWS Cognito configuration - these will come from CDK outputs
+COGNITO_USER_POOL_ID = os.environ.get('COGNITO_USER_POOL_ID')
+COGNITO_CLIENT_ID = os.environ.get('COGNITO_CLIENT_ID')
+DYNAMODB_TABLE_NAME = os.environ.get('DYNAMODB_TABLE_NAME', 'CoolingProjects')
+
+# Check for required environment variables
+if not COGNITO_USER_POOL_ID or not COGNITO_CLIENT_ID:
+    st.error("""
+    ⚠️ **Missing AWS Configuration!**
+    
+    For local development, you need to set these environment variables:
+    
+    ```bash
+    export COGNITO_USER_POOL_ID=us-east-1_m90QdkzAE
+    export COGNITO_CLIENT_ID=9femh6tcf9na3e32ecrbvv531
+    export DYNAMODB_TABLE_NAME=StreamlitStack-CoolingProjectsTable0EA00323-11DPLBS3H8FEF
+    export AWS_DEFAULT_REGION=us-east-1
+    ```
+    
+    Then restart Streamlit with: `poetry run streamlit run app.py`
+    
+    Also ensure you have AWS credentials configured via:
+    - `aws sso login --profile prodAdmin` (then `export AWS_PROFILE=prodAdmin`)
+    - Or `aws configure` for regular credentials
+    """)
+    st.stop()
+
+# Initialize AWS clients
+cognito_client = boto3.client('cognito-idp', region_name='us-east-1')
+dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
+table = dynamodb.Table(DYNAMODB_TABLE_NAME)
+
+# Authentication functions
+def sign_up(username, password, email):
+    try:
+        response = cognito_client.sign_up(
+            ClientId=COGNITO_CLIENT_ID,
+            Username=username,
+            Password=password,
+            UserAttributes=[{'Name': 'email', 'Value': email}]
+        )
+        return True, "Sign up successful! Please check your email for verification code."
+    except ClientError as e:
+        return False, str(e)
+
+def confirm_sign_up(username, code):
+    try:
+        response = cognito_client.confirm_sign_up(
+            ClientId=COGNITO_CLIENT_ID,
+            Username=username,
+            ConfirmationCode=code
+        )
+        return True, "Account confirmed!"
+    except ClientError as e:
+        return False, str(e)
+
+def sign_in(username, password):
+    try:
+        response = cognito_client.initiate_auth(
+            ClientId=COGNITO_CLIENT_ID,
+            AuthFlow='USER_PASSWORD_AUTH',
+            AuthParameters={
+                'USERNAME': username,
+                'PASSWORD': password
+            }
+        )
+        st.session_state['access_token'] = response['AuthenticationResult']['AccessToken']
+        st.session_state['username'] = username
+        return True, "Logged in successfully!"
+    except ClientError as e:
+        return False, str(e)
+
+def save_project(project_name, results):
+    if 'access_token' not in st.session_state:
+        return False, "Please log in to save projects"
+
+    try:
+        table.put_item(
+            Item={
+                'username': st.session_state['username'],
+                'project_name': project_name,
+                'results': json.dumps(results.dict()),
+                'created_at': datetime.now().isoformat()
+            }
+        )
+        return True, "Project saved!"
+    except ClientError as e:
+        return False, str(e)
+
+def load_projects():
+    if 'access_token' not in st.session_state:
+        return None
+
+    try:
+        response = table.query(
+            KeyConditionExpression=Key('username').eq(st.session_state['username'])
+        )
+        return response['Items']
+    except ClientError as e:
+        st.error(str(e))
+        return None
 
 # Beautification: Custom theme and page config
 st.set_page_config(
@@ -188,7 +305,7 @@ if chosen_bld:
 
 # --- Display Single Result ---
 st.title("Cooling Load Estimator")
-st.caption("Preliminary sizing via ASHRAE check figures")
+st.caption("Preliminary sizing estimates")
 if not results:
     st.warning("Select valid inputs to compute.")
 else:
@@ -284,3 +401,130 @@ if len(selected_blds) > 1:
         st.warning("No valid data for comparison across selected types.")
 else:
     st.info("Select multiple building types to compare tonnage ranges.")
+
+# === SIDEBAR AUTHENTICATION & PROJECT MANAGEMENT ===
+with st.sidebar:
+    st.title("🔐 Account")
+    
+    # Initialize session state for authentication
+    if 'access_token' not in st.session_state:
+        st.session_state['access_token'] = None
+    if 'username' not in st.session_state:
+        st.session_state['username'] = None
+    if 'show_auth_form' not in st.session_state:
+        st.session_state['show_auth_form'] = False
+    
+    # User status and authentication
+    if st.session_state.get('access_token'):
+        # Logged in user UI
+        st.success(f"👋 **{st.session_state['username']}**")
+        if st.button("🚪 Sign Out", use_container_width=True):
+            st.session_state['access_token'] = None
+            st.session_state['username'] = None
+            st.session_state['show_auth_form'] = False
+            st.rerun()
+        
+        st.divider()
+        st.subheader("📁 Your Projects")
+        
+        # Load and display user projects
+        projects = load_projects()
+        if projects:
+            for project in projects:
+                if st.button(f"📊 {project['project_name']}", use_container_width=True):
+                    st.json(json.loads(project['results']))
+        else:
+            st.info("💡 No saved projects yet")
+    
+    else:
+        # Guest user UI
+        st.info("👤 **Guest Mode**")
+        st.caption("Sign in to save and manage projects")
+        
+        if st.button("🔑 Sign In / Sign Up", use_container_width=True):
+            st.session_state['show_auth_form'] = not st.session_state.get('show_auth_form', False)
+        
+        # Authentication form (collapsible)
+        if st.session_state.get('show_auth_form'):
+            st.divider()
+            auth_tab1, auth_tab2, auth_tab3 = st.tabs(["Sign In", "Sign Up", "Confirm"])
+            
+            with auth_tab1:
+                with st.form("signin_form"):
+                    username = st.text_input("Username")
+                    password = st.text_input("Password", type="password")
+                    signin_submitted = st.form_submit_button("Sign In", use_container_width=True)
+                    
+                    if signin_submitted and username and password:
+                        success, message = sign_in(username, password)
+                        if success:
+                            st.session_state['show_auth_form'] = False
+                            st.success("✅ Signed in!")
+                            st.rerun()
+                        else:
+                            st.error(f"❌ {message}")
+            
+            with auth_tab2:
+                with st.form("signup_form"):
+                    signup_username = st.text_input("Username", key="signup_user")
+                    signup_email = st.text_input("Email", key="signup_email")
+                    signup_password = st.text_input("Password", type="password", key="signup_pass")
+                    signup_submitted = st.form_submit_button("Sign Up", use_container_width=True)
+                    
+                    if signup_submitted and signup_username and signup_email and signup_password:
+                        success, message = sign_up(signup_username, signup_password, signup_email)
+                        if success:
+                            st.success("✅ Account created! Check your email.")
+                        else:
+                            st.error(f"❌ {message}")
+            
+            with auth_tab3:
+                with st.form("confirm_form"):
+                    confirm_username = st.text_input("Username", key="confirm_user")
+                    confirm_code = st.text_input("Confirmation Code", key="confirm_code")
+                    confirm_submitted = st.form_submit_button("Confirm", use_container_width=True)
+                    
+                    if confirm_submitted and confirm_username and confirm_code:
+                        success, message = confirm_sign_up(confirm_username, confirm_code)
+                        if success:
+                            st.success("✅ Account confirmed!")
+                        else:
+                            st.error(f"❌ {message}")
+
+# === PROJECT SAVING (MAIN AREA) ===
+if results:
+    st.subheader("💾 Save Project")
+    
+    # Check if user is logged in
+    if st.session_state.get('access_token'):
+        # User is logged in - show save form
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            project_name = st.text_input("Project Name", placeholder="Enter a name for this project...")
+        with col2:
+            st.write("")  # Spacing
+            save_clicked = st.button("💾 Save", use_container_width=True, type="primary")
+        
+        if save_clicked and project_name:
+            success, message = save_project(project_name, results)
+            if success:
+                st.success(f"✅ {message}")
+                # Update sidebar projects (force refresh)
+                st.rerun()
+            else:
+                st.error(f"❌ {message}")
+        elif save_clicked and not project_name:
+            st.warning("⚠️ Please enter a project name")
+    
+    else:
+        # User not logged in - show sign-in prompt
+        st.info("🔐 **Sign in to save your projects** and access them from any device!")
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            if st.button("🔑 Sign In", use_container_width=True, type="primary"):
+                st.session_state['show_auth_form'] = True
+                st.rerun()
+        with col2:
+            if st.button("📝 Sign Up", use_container_width=True):
+                st.session_state['show_auth_form'] = True
+                st.rerun()

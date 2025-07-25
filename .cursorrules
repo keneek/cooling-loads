@@ -1,0 +1,52 @@
+# Cursor AI Rules for AWS MCP Tools
+
+## Key Instruction
+
+You have access to a suite of AWS MCP (Managed Cloud Platform) tools for managing AWS resources, CDK guidance, and more. Use these tools when appropriate for AWS-related tasks, such as resource management, CDK advice, or CloudFormation operations. Prefer calling these tools in parallel when multiple are relevant.
+
+## Available AWS MCP Tools
+
+Here is a list of available MCP tools you can call using the standard function call format. Refer to their descriptions for usage:
+
+1. **mcp_awslabs_cfn-mcp-server_get_resource_schema_information**: Get schema information for an AWS resource type (e.g., "AWS::S3::Bucket"). Parameters: resource_type, region (optional).
+
+2. **mcp_awslabs_cfn-mcp-server_list_resources**: List AWS resources of a specified type. Parameters: resource_type, region (optional).
+
+3. **mcp_awslabs_cfn-mcp-server_get_resource**: Get details of a specific AWS resource. Parameters: resource_type, identifier, region (optional).
+
+4. **mcp_awslabs_cfn-mcp-server_update_resource**: Update an AWS resource using JSON Patch. Parameters: resource_type, identifier, patch_document (array), region (optional).
+
+5. **mcp_awslabs_cfn-mcp-server_create_resource**: Create an AWS resource. Parameters: resource_type, properties (object), region (optional).
+
+6. **mcp_awslabs_cfn-mcp-server_delete_resource**: Delete an AWS resource. Parameters: resource_type, identifier, region (optional).
+
+7. **mcp_awslabs_cfn-mcp-server_get_resource_request_status**: Get status of a long-running operation. Parameters: request_token, region (optional).
+
+8. **mcp_awslabs_cfn-mcp-server_create_template**: Generate CloudFormation template from existing resources. Parameters: template_name (optional), resources (array, optional), output_format, deletion_policy, update_replace_policy, template_id (optional), save_to_file (optional), region (optional).
+
+9. **mcp_awslabs_cdk-mcp-server_CDKGeneralGuidance**: Get prescriptive CDK advice for building applications on AWS. Parameters: random_string (dummy).
+
+10. **mcp_awslabs_cdk-mcp-server_ExplainCDKNagRule**: Explain a specific CDK Nag rule. Parameters: rule_id.
+
+11. **mcp_awslabs_cdk-mcp-server_CheckCDKNagSuppressions**: Check CDK code for Nag suppressions. Parameters: code (optional), file_path (optional).
+
+12. **mcp_awslabs_cdk-mcp-server_GenerateBedrockAgentSchema**: Generate OpenAPI schema for Bedrock Agents. Parameters: lambda_code_path, output_path.
+
+13. **mcp_awslabs_cdk-mcp-server_GetAwsSolutionsConstructPattern**: Search AWS Solutions Constructs patterns. Parameters: pattern_name (optional), services (optional).
+
+14. **mcp_awslabs_cdk-mcp-server_SearchGenAICDKConstructs**: Search for GenAI CDK constructs. Parameters: query (optional), construct_type (optional).
+
+15. **mcp_awslabs_cdk-mcp-server_LambdaLayerDocumentationProvider**: Provide documentation for Lambda layers. Parameters: layer_type.
+
+16. **mcp_awslabs_core-mcp-server_prompt_understanding**: Use for understanding user queries in AWS context. Parameters: random_string (dummy).
+
+## Usage Guidelines
+
+- **When to Use**: Call these tools for AWS resource operations, CDK guidance, or when the query involves AWS infrastructure.
+- **Parallel Calls**: Use multiple tools in parallel if needed (e.g., list resources then get details).
+- **Region**: Specify 'us-east-1' if not provided, based on the project.
+- **Error Handling**: If a tool call fails, analyze the error and try alternatives.
+- **Prompt Understanding**: Always start AWS-related queries with mcp_awslabs_core-mcp-server_prompt_understanding for better context.
+- **CDK Focus**: For CDK-specific tasks, prefer the CDK MCP tools.
+
+Follow these rules strictly to enhance AWS-related responses.
