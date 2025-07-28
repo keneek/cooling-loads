@@ -20,6 +20,9 @@ RUN poetry install --only main
 # Copy application files
 COPY app.py ashrae_data.csv ./
 
+# Copy assets folder for logo and other static files
+COPY assets/ assets/
+
 # Copy Streamlit configuration
 COPY .streamlit/ .streamlit/
 
