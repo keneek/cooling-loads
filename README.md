@@ -6,6 +6,12 @@ A professional-grade Streamlit web application for estimating HVAC cooling loads
 
 **Production URL:** [https://loadestimator.com](https://loadestimator.com) ✅ **LIVE**
 
+## 📸 Application Preview
+
+![Cooling Load Estimator Screenshot](assets/load-estimator-screenshot.jpg)
+
+*Professional HVAC cooling load calculator with project management, user authentication, and real-time calculations*
+
 ## ✨ Features
 
 ### Core Functionality
@@ -292,10 +298,10 @@ The app uses a custom dark theme configured in `.streamlit/config.toml`:
 ### Smart State Management & Visual Feedback ✨ **NEW**
 
 - **Real-Time State Detection**: Automatic detection of changes to building selections, square footage, or "Show details for" dropdown
-- **Professional Status Indicators**: 
+- **Professional Status Indicators**:
   - 🟢 **Green "SAVED" bar**: Project matches saved state exactly
   - 🔴 **Red "MODIFIED" bar**: Project has unsaved changes with clear visual feedback
-- **Intelligent Button States**: 
+- **Intelligent Button States**:
   - **Update Project**: Enabled only when changes exist, disabled with helpful tooltip when no changes
   - **Revert Changes**: Enabled only when changes exist, reverts to original saved state
   - **Save As New**: Always available for creating project variants
@@ -331,13 +337,13 @@ The app uses a custom dark theme configured in `.streamlit/config.toml`:
 
 - **Enhanced Project Previews**: Each saved project displays:
   - 📅 Creation date for easy identification
-  - 🏢 Building type and square footage 
+  - 🏢 Building type and square footage
   - ⚡ Key results (tonnage) for quick reference
   - 🏷️ Clear indicators for legacy vs. new format projects
 - **Intuitive Actions**:
   - **📂 Load**: One-click restoration of complete project configuration
   - **🗑️ Delete**: Reliable deletion with explicit Yes/No confirmation system
-- **Smart State Management**: 
+- **Smart State Management**:
   - Visual indicators show currently loaded project
   - Real-time modification status with professional styling
   - Session persistence across browser refreshes
