@@ -498,6 +498,11 @@ If Route53 nameservers change, update GoDaddy:
 - [ ] Project history and version tracking
 - [ ] Save and manage PDF reports for each project
 - [ ] Project collaboration and sharing features
+- [ ] Location-based energy code and weather zone lookup
+- [ ] High humidity climate detection and dehumidification recommendations
+- [ ] Decoupling recommendations based on climate region and building category
+- [ ] Cost estimation features (relative cost indicators and cost per ton)
+- [ ] High humidity climate cost modeling (dehumidification premium pricing)
 
 ## 🤝 Contributing
 
