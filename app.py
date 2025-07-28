@@ -757,46 +757,63 @@ with st.sidebar:
             for project in projects:
                 # Parse project config for preview
                 try:
-                    config_data = json.loads(project.get('config', '{}'))
                     project_name = project['project_name']
+                    created_date = project.get('created_at', 'Unknown date')[:10] if project.get('created_at') else 'Unknown date'
                     
-                    # Handle both old format (results only) and new format (full config)
-                    if 'range_results' in config_data:
+                    # Check if this is new format (has 'config') or old format (has 'results')
+                    if 'config' in project:
                         # New format with full config
+                        config_data = json.loads(project['config'])
                         building_type = config_data.get('current_building_type', 'Unknown')
                         sq_ft = config_data.get('square_footage', 0)
                         avg_tonnage = config_data['range_results']['avg']['tonnage']
-                        created_at = config_data.get('created_at', project.get('created_at', 'Unknown'))
-                        preview_text = f"{building_type} • {sq_ft:,} sq ft • {avg_tonnage:.1f} tons"
-                    else:
-                        # Old format - try to extract basic info from results
-                        results_data = config_data if 'tonnage' in config_data else json.loads(project.get('results', '{}'))
+                        preview_text = f"📅 {created_date}"
+                        detail_text = f"{building_type} • {sq_ft:,} sq ft • {avg_tonnage:.1f} tons"
+                        is_legacy = False
+                    elif 'results' in project:
+                        # Old format - extract from results
+                        results_data = json.loads(project['results'])
                         tonnage = results_data.get('tonnage', 0)
-                        preview_text = f"Legacy Project • {tonnage:.1f} tons"
+                        occupancy = results_data.get('total_occupancy', 0)
+                        electrical = results_data.get('electrical_kw', 0)
+                        preview_text = f"📅 {created_date} • Legacy Format"
+                        detail_text = f"{tonnage:.1f} tons • {occupancy:.0f} people • {electrical:.1f} kW"
+                        is_legacy = True
+                    else:
+                        preview_text = "Invalid project data"
+                        detail_text = ""
+                        is_legacy = False
                         
-                except (json.JSONDecodeError, KeyError):
-                    preview_text = "Invalid project data"
+                except (json.JSONDecodeError, KeyError, TypeError) as e:
+                    created_date = project.get('created_at', 'Unknown date')[:10] if project.get('created_at') else 'Unknown date'
+                    preview_text = f"📅 {created_date} • Error loading project"
+                    detail_text = "Unable to parse project data"
+                    is_legacy = False
                 
                 # Project container
                 with st.container():
                     st.markdown(f"**📊 {project_name}**")
                     st.caption(preview_text)
+                    if detail_text:
+                        st.markdown(f"*{detail_text}*")
                     
-                    # Action buttons
-                    col1, col2, col3 = st.columns([1, 1, 1])
+                    # Action buttons - Load and Delete only (removed View)
+                    col1, col2 = st.columns([1, 1])
                     with col1:
-                        if st.button("👁️ View", key=f"view_{project_name}", use_container_width=True):
-                            st.json(config_data)
-                    with col2:
-                        if st.button("📂 Load", key=f"load_{project_name}", use_container_width=True, type="primary"):
+                        # Disable load for legacy projects since they don't have full config
+                        load_disabled = is_legacy
+                        load_help = "⚠️ Cannot load legacy projects (missing configuration data)" if is_legacy else None
+                        
+                        if st.button("📂 Load", key=f"load_{project_name}", use_container_width=True, 
+                                   type="primary", disabled=load_disabled, help=load_help):
                             success, message = load_project_config(project_name)
                             if success:
                                 st.success(message)
                                 st.rerun()
                             else:
                                 st.error(f"❌ {message}")
-                    with col3:
-                        if st.button("🗑️ Del", key=f"delete_{project_name}", use_container_width=True):
+                    with col2:
+                        if st.button("🗑️ Delete", key=f"delete_{project_name}", use_container_width=True):
                             # Confirm deletion
                             if st.session_state.get(f'confirm_delete_{project_name}'):
                                 success, message = delete_project(project_name)
