@@ -212,15 +212,15 @@ st.set_page_config(
 
 # Add custom HTML meta tags for social media sharing
 st.html("""
-<meta property="og:title" content="Cooling Load Estimator - ASHRAE Standards" />
-<meta property="og:description" content="Professional HVAC cooling load calculator based on ASHRAE standards. Calculate tonnage, occupancy, and electrical loads for various building types." />
+<meta property="og:title" content="Cooling Load Estimator" />
+<meta property="og:description" content="Professional HVAC cooling load calculator. Calculate tonnage, occupancy, and electrical loads for various building types." />
 <meta property="og:type" content="website" />
 <meta property="og:url" content="https://loadestimator.com" />
 <meta property="og:site_name" content="Load Estimator" />
 <meta name="twitter:card" content="summary" />
-<meta name="twitter:title" content="Cooling Load Estimator - ASHRAE Standards" />
-<meta name="twitter:description" content="Professional HVAC cooling load calculator based on ASHRAE standards. Calculate tonnage, occupancy, and electrical loads for various building types." />
-<meta name="description" content="Professional HVAC cooling load calculator based on ASHRAE standards. Calculate tonnage, occupancy, and electrical loads for various building types." />
+<meta name="twitter:title" content="Cooling Load Estimator" />
+<meta name="twitter:description" content="Professional HVAC cooling load calculator based. Calculate tonnage, occupancy, and electrical loads for various building types." />
+<meta name="description" content="Professional HVAC cooling load calculator based on category and square footage. Calculate tonnage, occupancy, and electrical loads for various building types." />
 <meta name="author" content="Load Estimator" />
 """)
 
@@ -655,7 +655,7 @@ else:
             pdf = FPDF()  # type: ignore
             pdf.add_page()
             pdf.set_font('Arial', 'B', 12)
-            pdf.cell(0, 10, 'ASHRAE Cooling Load Report', ln=1)
+            pdf.cell(0, 10, 'Cooling Load Estimator Report', ln=1)
             pdf.set_font('Arial', '', 10)
             pdf.cell(0, 10, f'Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}', ln=1)
             pdf.cell(0, 10, f'Building: {building_type}, Area: {sq_ft} sq ft', ln=1)
@@ -681,7 +681,7 @@ else:
             pdf.cell(0, 10, f'Refrigeration Rate: {params.refrig} ft²/ton', ln=1)
             pdf.cell(0, 10, f'Occupancy Rate: {params.occupancy} ft²/person', ln=1)
             pdf.cell(0, 10, f'Plug/Light Rate: {params.electrical} W/ft²', ln=1)
-            pdf.cell(0, 10, 'Note: Electrical values are for HVAC heat gain assumptions per ASHRAE.', ln=1)
+            pdf.cell(0, 10, 'Note: Electrical values are estimated plug load and other equipment for HVAC heat gain assumptions.', ln=1)
             return pdf  # type: ignore
 
         pdf = create_pdf(range_results, chosen_bld, sq_ft)  # type: ignore
