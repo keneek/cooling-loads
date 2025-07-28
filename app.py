@@ -612,6 +612,23 @@ if chosen_bld:
 
 # --- Display Range Results ---
 st.title("Cooling Load Estimator")
+
+# Show loaded project indicator in main panel
+if st.session_state.get('project_loaded') and st.session_state.get('loaded_project_name'):
+    col1, col2 = st.columns([4, 1])
+    with col1:
+        st.info(f"📂 **Working on Project:** {st.session_state['loaded_project_name']}")
+    with col2:
+        if st.button("✖️ Clear", help="Clear loaded project and start fresh", key="main_clear_project"):
+            st.session_state['project_loaded'] = False
+            st.session_state['loaded_project_name'] = None
+            # Clear widget states properly (don't set directly - causes Streamlit errors)
+            if 'selected_buildings' in st.session_state:
+                del st.session_state['selected_buildings']
+            if 'square_footage' in st.session_state:
+                del st.session_state['square_footage']
+            st.rerun()
+
 if chosen_bld:
     st.subheader(f"📋 {chosen_bld}")
 st.caption("Preliminary sizing estimates")
