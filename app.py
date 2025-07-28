@@ -128,9 +128,11 @@ def save_project(project_name, range_results, selected_building_types, current_b
         
         now = datetime.now().isoformat()
         
-        # Debug: Print the square footage being saved
-        print(f"DEBUG save_project: square_footage parameter = {square_footage}")
-        print(f"DEBUG save_project: type = {type(square_footage)}")
+        # Ensure we have a valid current_building_type
+        if not current_building_type and selected_building_types:
+            current_building_type = selected_building_types[0]  # Default to first selected
+        elif not current_building_type:
+            return False, "No building type selected"
         
         project_config = ProjectConfig(
             project_name=project_name,
@@ -146,11 +148,21 @@ def save_project(project_name, range_results, selected_building_types, current_b
             Item={
                 'username': st.session_state['username'],
                 'project_name': project_name,
-                'config': json.dumps(project_config.dict()),
+                'config': json.dumps(project_config.model_dump()),
                 'created_at': created_at,
                 'updated_at': now
             }
         )
+        
+        # Auto-load the project after saving
+        st.session_state['loaded_selected_blds'] = selected_building_types.copy()
+        st.session_state['loaded_current_bld'] = current_building_type
+        st.session_state['loaded_sq_ft'] = square_footage
+        st.session_state['project_loaded'] = True
+        st.session_state['loaded_project_name'] = project_name
+        
+        # Flag for widget reset on next run
+        st.session_state['need_widget_reset'] = True
         
         action = "updated" if is_update else "saved"
         return True, f"Project {action}!"
@@ -484,13 +496,69 @@ if 'loaded_project_name' not in st.session_state:
     st.session_state['loaded_project_name'] = None
 if 'show_save_as_new' not in st.session_state:
     st.session_state['show_save_as_new'] = False
+if 'show_save_as_main' not in st.session_state:
+    st.session_state['show_save_as_main'] = False
 
 # Remove zone-related state
 
 # Remove update_available_zones function
 
+def has_project_state_changed():
+    """Check if current form state differs from loaded project state"""
+    if not st.session_state.get('project_loaded') or not st.session_state.get('loaded_project_name'):
+        return False
+    
+    # Don't show changes immediately after loading while widgets are resetting
+    if st.session_state.get('need_widget_reset'):
+        return False
+    
+    # Get current form state from session state (widgets) with fallbacks
+    current_selected = st.session_state.get('selected_buildings', [])
+    current_building = st.session_state.get('current_building_selection')
+    current_sq_ft = st.session_state.get('square_footage', 7500)
+    
+    # Get loaded project state
+    loaded_selected = st.session_state.get('loaded_selected_blds', [])
+    loaded_building = st.session_state.get('loaded_current_bld')
+    loaded_sq_ft = st.session_state.get('loaded_sq_ft', 7500)
+    
+    # If widgets haven't been initialized yet, use loaded values as current
+    if not current_selected and loaded_selected:
+        current_selected = loaded_selected
+    if current_building is None and loaded_building:
+        current_building = loaded_building
+    
+    # Handle None values - if current building is None but we have a loaded building, that's a change
+    if current_building is None and loaded_building is not None:
+        return True
+    if current_building is not None and loaded_building is None:
+        return True
+    
+    # Compare states
+    if set(current_selected or []) != set(loaded_selected or []):
+        return True
+    if current_building != loaded_building:
+        return True
+    if current_sq_ft != loaded_sq_ft:
+        return True
+    
+    return False
+
 # Sidebar
 st.sidebar.title("Input Parameters")
+
+# Project Name field (only visible when authenticated)
+if st.session_state.get('access_token'):
+    if not st.session_state.get('project_loaded'):
+        project_name = st.sidebar.text_input("Project Name", placeholder="Enter project name...", key="sidebar_project_name")
+    else:
+        # Show current project name (read-only when project is loaded)
+        st.sidebar.text_input("Project Name", value=st.session_state.get('loaded_project_name', ''), disabled=True, key="sidebar_loaded_project_name")
+else:
+    # Show disabled field with login prompt for guests
+    st.sidebar.text_input("Project Name", placeholder="Sign in to save projects", disabled=True, key="sidebar_guest_project_name")
+
+st.sidebar.markdown("---")
 
 # Multi-select for building types - handle loaded project state properly
 if st.session_state.get('project_loaded') and st.session_state.get('need_widget_reset'):
@@ -499,6 +567,14 @@ if st.session_state.get('project_loaded') and st.session_state.get('need_widget_
         del st.session_state['selected_buildings']
     if 'square_footage' in st.session_state:
         del st.session_state['square_footage']
+    if 'current_building_selection' in st.session_state:
+        del st.session_state['current_building_selection']
+    
+    # Set widget states to match loaded project immediately after clearing
+    st.session_state['selected_buildings'] = st.session_state.get('loaded_selected_blds', [])
+    st.session_state['square_footage'] = st.session_state.get('loaded_sq_ft', 7500)
+    st.session_state['current_building_selection'] = st.session_state.get('loaded_current_bld')
+    
     st.session_state['need_widget_reset'] = False
 
 # Set defaults based on loaded project or use defaults
@@ -588,46 +664,250 @@ def compute_range_results(
     except Exception:
         return None
 
-# Compute for single (first) selection for main display
-range_results = None
+
+# Determine chosen building for computation (the selectbox will appear later for better UX)
 if len(selected_blds) > 1:
     # If project was loaded, try to select the loaded current building
     if st.session_state.get('project_loaded') and st.session_state['loaded_current_bld'] in selected_blds:
-        default_index = selected_blds.index(st.session_state['loaded_current_bld'])
+        chosen_bld = st.session_state['loaded_current_bld']
     else:
-        default_index = 0
-    
-    chosen_bld = st.selectbox(
-        "Show details for",
-        selected_blds,
-        index=default_index if selected_blds else None
-    )
+        chosen_bld = selected_blds[0]  # Default to first
 else:
+    # Single building case - set the session state to match
     chosen_bld = selected_blds[0] if selected_blds else None
+    if chosen_bld:
+        st.session_state['current_building_selection'] = chosen_bld
+
+# Compute results for the chosen building
+range_results = None
 if chosen_bld:
     try:
         range_results = compute_range_results(chosen_bld, sq_ft)
     except Exception as err:
         st.error(f"Calculation error for {chosen_bld}: {err}")
 
-# --- Display Range Results ---
-st.title("Cooling Load Estimator")
+# Add save button in sidebar after computation (only show when no project is loaded AND user is logged in)
+with st.sidebar:
+    if not st.session_state.get('project_loaded') and st.session_state.get('access_token'):
+        # Get project name from session state or default
+        current_project_name = st.session_state.get('sidebar_project_name', '')
+        if st.button("💾 Save Project", use_container_width=True, type="primary", key="sidebar_save_after_computation"):
+            if current_project_name and range_results:
+                # Get current state with fallbacks
+                current_buildings = st.session_state.get('selected_buildings', [])
+                current_building = st.session_state.get('current_building_selection')
+                current_sq_ft = st.session_state.get('square_footage', 7500)
+                
+                # Fallback for building selection if None
+                if not current_building and current_buildings:
+                    current_building = current_buildings[0]
+                
+                success, message = save_project(
+                    current_project_name, 
+                    range_results, 
+                    current_buildings,
+                    current_building, 
+                    current_sq_ft
+                )
+                if success:
+                    st.success("✅ Saved!")
+                    st.rerun()
+                else:
+                    st.error(f"❌ {message}")
+            elif not current_project_name:
+                st.warning("⚠️ Enter project name")
+            elif not range_results:
+                st.warning("⚠️ Complete calculation first")
+    elif not st.session_state.get('project_loaded') and not st.session_state.get('access_token'):
+        # Show login prompt instead of save button
+        st.info("🔐 Sign in to save projects")
 
-# Show loaded project indicator in main panel
-if st.session_state.get('project_loaded') and st.session_state.get('loaded_project_name'):
-    col1, col2 = st.columns([4, 1])
+
+# Show loaded project indicator in main panel with smart controls (only for authenticated users)
+if st.session_state.get('project_loaded') and st.session_state.get('loaded_project_name') and st.session_state.get('access_token'):
+    # Check if project state has changed
+    has_changes = has_project_state_changed()
+    
+    # Create a more polished project status bar with consistent styling
+    status_style = "modified" if has_changes else "saved"
+    status_bg = "linear-gradient(90deg, #ff6b6b 0%, #ee5a24 100%)" if has_changes else "linear-gradient(90deg, #26de81 0%, #20bf6b 100%)"
+    status_badge = "MODIFIED" if has_changes else "SAVED"
+    
+    st.markdown(f"""
+    <div style="
+        background: {status_bg};
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        margin-bottom: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    ">
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 18px;">📂</span>
+            <strong>{st.session_state['loaded_project_name']}</strong>
+            <span style="background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 12px; font-size: 12px;">
+                {status_badge}
+            </span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Consistent action buttons - always show all 4, but disable when not applicable
+    col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
+    
     with col1:
-        st.info(f"📂 **Working on Project:** {st.session_state['loaded_project_name']}")
+        # Update Project - disabled when no changes
+        update_disabled = not has_changes
+        update_help = "No changes to save" if update_disabled else "Save changes to current project"
+        if st.button("📝 Update Project", 
+                    help=update_help, 
+                    key="main_update_project", 
+                    type="primary" if has_changes else "secondary",
+                    use_container_width=True, 
+                    disabled=update_disabled):
+            if range_results:
+                # Get current state with fallbacks
+                current_buildings = st.session_state.get('selected_buildings', [])
+                current_building = st.session_state.get('current_building_selection')
+                current_sq_ft = st.session_state.get('square_footage', 7500)
+                
+                # Fallback for building selection if None
+                if not current_building and current_buildings:
+                    current_building = current_buildings[0]
+                
+                success, message = save_project(
+                    st.session_state['loaded_project_name'], 
+                    range_results, 
+                    current_buildings,
+                    current_building, 
+                    current_sq_ft
+                )
+                if success:
+                    st.success("✅ Project updated!")
+                    # Auto-loading is now handled by save_project function
+                    st.rerun()
+                else:
+                    st.error(f"❌ {message}")
+    
     with col2:
-        if st.button("✖️ Clear", help="Clear loaded project and start fresh", key="main_clear_project"):
+        # Save As New - always enabled
+        if st.button("💾 Save As New", help="Save as a new project", key="main_save_as_project", use_container_width=True):
+            st.session_state['show_save_as_main'] = True
+            st.rerun()
+    
+    with col3:
+        # Revert Changes - disabled when no changes
+        revert_disabled = not has_changes
+        revert_help = "No changes to revert" if revert_disabled else "Reload original project"
+        if st.button("🔄 Revert Changes", 
+                    help=revert_help, 
+                    key="main_revert_project", 
+                    use_container_width=True, 
+                    disabled=revert_disabled):
+            # Force reload the project and reset widgets
+            success, message = load_project_config(st.session_state['loaded_project_name'])
+            if success:
+                st.success("✅ Changes reverted!")
+                # Force widget reset by clearing widget states
+                if 'selected_buildings' in st.session_state:
+                    del st.session_state['selected_buildings']
+                if 'square_footage' in st.session_state:
+                    del st.session_state['square_footage']
+                if 'current_building_selection' in st.session_state:
+                    del st.session_state['current_building_selection']
+                st.rerun()
+            else:
+                st.error(f"❌ {message}")
+    
+    with col4:
+        # Close Project - always enabled
+        if st.button("✖️ Close Project", help="Clear loaded project", key="main_clear_project", use_container_width=True):
             st.session_state['project_loaded'] = False
             st.session_state['loaded_project_name'] = None
-            # Clear widget states properly (don't set directly - causes Streamlit errors)
+            # Clear widget states properly
             if 'selected_buildings' in st.session_state:
                 del st.session_state['selected_buildings']
             if 'square_footage' in st.session_state:
                 del st.session_state['square_footage']
             st.rerun()
+st.title("Cooling Load Estimator")
+# Handle "Save As" dialog in main area with better styling (only for authenticated users)
+if st.session_state.get('show_save_as_main') and st.session_state.get('access_token'):
+    st.markdown("---")
+    st.markdown("### 💾 Save as New Project")
+    
+    col1, col2, col3 = st.columns([3, 1, 1])
+    with col1:
+        new_project_name = st.text_input("Project Name", placeholder="Enter new project name...", key="main_new_project_name", label_visibility="collapsed")
+    with col2:
+        if st.button("💾 Save", type="primary", key="main_save_new", use_container_width=True):
+            if new_project_name and range_results:
+                # Get current state with fallbacks
+                current_buildings = st.session_state.get('selected_buildings', [])
+                current_building = st.session_state.get('current_building_selection')
+                current_sq_ft = st.session_state.get('square_footage', 7500)
+                
+                # Fallback for building selection if None
+                if not current_building and current_buildings:
+                    current_building = current_buildings[0]
+                
+                success, message = save_project(
+                    new_project_name, 
+                    range_results, 
+                    current_buildings,
+                    current_building, 
+                    current_sq_ft
+                )
+                if success:
+                    st.success("✅ Saved as new project!")
+                    st.session_state['show_save_as_main'] = False
+                    st.rerun()
+                else:
+                    st.error(f"❌ {message}")
+            elif not new_project_name:
+                st.warning("⚠️ Enter project name")
+            elif not range_results:
+                st.warning("⚠️ Complete calculation first")
+    with col3:
+        if st.button("❌ Cancel", key="main_cancel_save_as", use_container_width=True):
+            st.session_state['show_save_as_main'] = False
+            st.rerun()
+    st.markdown("---")
+
+# Show guest info if not authenticated
+if not st.session_state.get('access_token'):
+    st.info("🔐 **Sign in to save and manage projects** - Use the sidebar to create an account or sign in to save your calculations for later.")
+
+# Show building selection dropdown after project status for better UX flow
+if len(selected_blds) > 1:
+    # Ensure the session state has a valid value for the selectbox
+    current_building_from_state = st.session_state.get('current_building_selection')
+    
+    # If no value in session state, or if the value isn't in the current options, reset to default
+    if not current_building_from_state or current_building_from_state not in selected_blds:
+        # If project was loaded, try to use the loaded current building
+        if st.session_state.get('project_loaded') and st.session_state.get('loaded_current_bld') in selected_blds:
+            st.session_state['current_building_selection'] = st.session_state['loaded_current_bld']
+        else:
+            st.session_state['current_building_selection'] = selected_blds[0]
+    
+    # Update chosen building based on user selection - this is now part of project state!
+    new_chosen_bld = st.selectbox(
+        "Show details for",
+        selected_blds,
+        key="current_building_selection"  # The key controls the value, no index needed
+    )
+    
+    # Update the chosen building and recompute if changed
+    chosen_bld = new_chosen_bld
+    if chosen_bld:
+        try:
+            range_results = compute_range_results(chosen_bld, sq_ft)
+        except Exception as err:
+            st.error(f"Calculation error for {chosen_bld}: {err}")
 
 if chosen_bld:
     st.subheader(f"📋 {chosen_bld}")
@@ -798,103 +1078,18 @@ with st.sidebar:
             st.session_state['access_token'] = None
             st.session_state['username'] = None
             st.session_state['show_auth_form'] = False
+            # Clear any loaded project states when signing out
+            st.session_state['project_loaded'] = False
+            st.session_state['loaded_project_name'] = None
+            st.session_state['show_save_as_main'] = False
+            # Clear widget states
+            if 'selected_buildings' in st.session_state:
+                del st.session_state['selected_buildings']
+            if 'square_footage' in st.session_state:
+                del st.session_state['square_footage']
             st.rerun()
         
-        st.divider()
-        st.subheader("🔐 Project Management")
-        
-        # Show loaded project indicator if applicable
-        if st.session_state.get('project_loaded') and st.session_state.get('loaded_project_name'):
-            st.success(f"📂 Loaded: {st.session_state['loaded_project_name']}")
-            
-            # Update/Save controls
-            col1, col2 = st.columns([1, 1])
-            with col1:
-                if st.button("📝 Update", use_container_width=True, type="primary"):
-                    if range_results:
-                        success, message = save_project(
-                            st.session_state['loaded_project_name'], 
-                            range_results, 
-                            selected_blds, 
-                            chosen_bld, 
-                            st.session_state['square_footage']  # Use actual widget state
-                        )
-                        if success:
-                            st.success("✅ Updated!")
-                            st.rerun()
-                        else:
-                            st.error(f"❌ {message}")
-            with col2:
-                if st.button("💾 Save As", use_container_width=True):
-                    st.session_state['show_save_as_new'] = True
-                    st.rerun()
-            
-            if st.button("✖️ Clear Loaded Project", use_container_width=True):
-                st.session_state['project_loaded'] = False
-                st.session_state['loaded_project_name'] = None
-                # Clear widget states properly (don't set directly - causes Streamlit errors)
-                if 'selected_buildings' in st.session_state:
-                    del st.session_state['selected_buildings']
-                if 'square_footage' in st.session_state:
-                    del st.session_state['square_footage']
-                st.rerun()
-        
-        else:
-            # No project loaded - show save new project
-            st.markdown("**💾 Save New Project**")
-            project_name = st.text_input("Project Name", placeholder="Enter project name...", key="sidebar_project_name")
-            if st.button("💾 Save Project", use_container_width=True, type="primary"):
-                if project_name and range_results:
-                    # Debug: Print the actual values being saved
-                    print(f"DEBUG: Saving project with square_footage = {st.session_state['square_footage']}")
-                    print(f"DEBUG: selected_blds = {selected_blds}")
-                    print(f"DEBUG: chosen_bld = {chosen_bld}")
-                    
-                    success, message = save_project(
-                        project_name, 
-                        range_results, 
-                        selected_blds, 
-                        chosen_bld, 
-                        st.session_state['square_footage']  # Use actual widget state
-                    )
-                    if success:
-                        st.success("✅ Saved!")
-                        st.rerun()
-                    else:
-                        st.error(f"❌ {message}")
-                elif not project_name:
-                    st.warning("⚠️ Enter project name")
-                elif not range_results:
-                    st.warning("⚠️ Select building type first")
-        
-        # Handle "Save as New" dialog
-        if st.session_state.get('show_save_as_new'):
-            st.divider()
-            st.markdown("**💾 Save as New Project**")
-            new_project_name = st.text_input("New Project Name", placeholder="Enter new name...", key="sidebar_new_project_name")
-            col1, col2 = st.columns([1, 1])
-            with col1:
-                if st.button("💾 Save", use_container_width=True, type="primary"):
-                    if new_project_name and range_results:
-                        success, message = save_project(
-                            new_project_name, 
-                            range_results, 
-                            selected_blds, 
-                            chosen_bld, 
-                            st.session_state['square_footage']
-                        )
-                        if success:
-                            st.success("✅ Saved!")
-                            st.session_state['show_save_as_new'] = False
-                            st.rerun()
-                        else:
-                            st.error(f"❌ {message}")
-                    else:
-                        st.warning("⚠️ Enter name")
-            with col2:
-                if st.button("❌ Cancel", use_container_width=True):
-                    st.session_state['show_save_as_new'] = False
-                    st.rerun()
+        # Project controls moved to top of sidebar and main area for better UX
 
         st.divider()
         st.subheader("📁 Your Projects")
@@ -1111,4 +1306,5 @@ if st.session_state.get('show_auth_form') and st.session_state.get('auth_source'
         st.session_state['auth_source'] = None
         st.rerun()
     
+
 

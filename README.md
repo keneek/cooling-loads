@@ -20,22 +20,30 @@ A professional-grade Streamlit web application for estimating HVAC cooling loads
 
 - **User Registration**: Secure sign-up with email verification via AWS Cognito
 - **User Authentication**: Sign in/out with session management
-- **Complete Project Configuration Saving**: Save full project state including building types, square footage, and range results
+- **Complete Project Configuration Saving**: Save full project state including building types, square footage, and selected building for analysis
 - **One-Click Project Loading**: Restore exact project configuration with all inputs and selections
+- **Smart State Change Detection**: Visual indicators show when project has been modified from saved state
+- **Auto-Loading Projects**: Projects automatically load after saving for seamless workflow
+- **Consistent Button Layout**: Professional UI with disabled states instead of disappearing buttons
+- **Building Selection as Project State**: "Show details for" dropdown selection is saved as part of project configuration
 - **Rich Project Previews**: See building type, square footage, tonnage, and creation date at a glance
-- **Smart Project Management**: Load, delete with confirmation, and manage all saved projects
-- **Session State Integration**: Visual indicators show loaded projects, auto-clear when inputs change
+- **Smart Project Management**: Load, update, revert, and delete with immediate visual feedback
+- **Session State Integration**: Visual indicators show loaded projects, modification status, and available actions
 - **Legacy Project Support**: Backward compatibility with existing saved projects
 - **Guest Mode**: Full functionality available without registration
-- **Smart UX**: Authentication prompts only appear when saving projects
+- **Authentication-Protected Features**: Save/load functionality only available to authenticated users with clear messaging
 
 ### User Experience
 
+- **Professional Status Indicators**: Beautiful gradient status bars showing project state (SAVED/MODIFIED)
+- **Smart Action Controls**: Update and Revert buttons disabled when no changes, with helpful tooltips
+- **Intuitive Project Flow**: Clear progression from project loading to modification to saving
+- **Mobile-Optimized Design**: Improved touch targets, form layouts, and responsive navigation
 - **Clean Interface**: No authentication clutter on main screen for guest users
 - **Sidebar Authentication**: Elegant user management in collapsible sidebar
 - **Dark Mode**: Professional dark theme optimized for engineering workflows
 - **Responsive Design**: Works seamlessly on desktop and mobile devices
-- **Real-time Calculations**: Instant updates as you modify inputs
+- **Real-time Calculations**: Instant updates as you modify inputs with immediate state change detection
 - **Export Capabilities**: Generate PDF reports for documentation and client presentations
 
 ### Technical Features
@@ -281,9 +289,24 @@ The app uses a custom dark theme configured in `.streamlit/config.toml`:
 
 ## 💾 Enhanced Project Management
 
+### Smart State Management & Visual Feedback ✨ **NEW**
+
+- **Real-Time State Detection**: Automatic detection of changes to building selections, square footage, or "Show details for" dropdown
+- **Professional Status Indicators**: 
+  - 🟢 **Green "SAVED" bar**: Project matches saved state exactly
+  - 🔴 **Red "MODIFIED" bar**: Project has unsaved changes with clear visual feedback
+- **Intelligent Button States**: 
+  - **Update Project**: Enabled only when changes exist, disabled with helpful tooltip when no changes
+  - **Revert Changes**: Enabled only when changes exist, reverts to original saved state
+  - **Save As New**: Always available for creating project variants
+  - **Close Project**: Always available to clear loaded project
+- **Auto-Loading Workflow**: Projects automatically load after saving, putting you directly into "working on project" mode
+- **Seamless State Synchronization**: Widget states properly sync with loaded project data, eliminating double-click issues
+
 ### Complete Configuration Saving
 
 - **Full Project State**: Save complete project configuration including selected building types, square footage, current building selection, and all range results (Low/Average/High)
+- **Building Selection as State**: "Show details for" dropdown selection is now part of project configuration - changing it triggers modification state
 - **Comprehensive Data Storage**: Projects include creation/update timestamps, user preferences, and calculation parameters
 - **Smart Session Integration**: Projects capture the exact state of your work session for perfect restoration
 - **Secure Storage**: All project data stored with per-user isolation in DynamoDB with AWS Cognito authentication
@@ -292,8 +315,17 @@ The app uses a custom dark theme configured in `.streamlit/config.toml`:
 
 - **Exact State Restoration**: Load button restores complete project configuration in sidebar inputs
 - **Smart Input Population**: Automatically selects saved building types, sets square footage, and chooses current building
-- **Visual Feedback**: Loaded project indicator shows which project is active with option to clear
+- **Visual Feedback**: Loaded project indicator shows which project is active with professional status bar styling
 - **Seamless Workflow**: Continue working exactly where you left off with all settings intact
+- **Immediate Ready State**: Projects load in "SAVED" state, only showing "MODIFIED" when you actually make changes
+
+### Enhanced Project Actions
+
+- **Update Project**: One-click saving of changes to current project with immediate state sync
+- **Revert Changes**: Instantly restore project to last saved state, undoing all modifications
+- **Save As New**: Create project variants while preserving original
+- **Close Project**: Clear loaded project and return to fresh state
+- **Smart Loading**: All save operations automatically load the project for continued work
 
 ### Rich Project Management Interface
 
@@ -307,7 +339,7 @@ The app uses a custom dark theme configured in `.streamlit/config.toml`:
   - **🗑️ Delete**: Reliable deletion with explicit Yes/No confirmation system
 - **Smart State Management**: 
   - Visual indicators show currently loaded project
-  - Auto-clear loaded state when inputs are manually modified
+  - Real-time modification status with professional styling
   - Session persistence across browser refreshes
 
 ### Legacy Project Support

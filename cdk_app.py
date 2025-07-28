@@ -95,19 +95,12 @@ class StreamlitStack(cdk.Stack):
                 task_image_options=ecs_patterns.ApplicationLoadBalancedTaskImageOptions(
                     image=ecs.ContainerImage.from_asset("."),
                     container_port=8501,
-                    # Add environment variables for better configuration
+                    # Add environment variables for configuration
                     environment={
                         "STREAMLIT_SERVER_PORT": "8501",
                         "STREAMLIT_SERVER_ADDRESS": "0.0.0.0",
                         "STREAMLIT_SERVER_HEADLESS": "true",
                         "STREAMLIT_BROWSER_GATHER_USAGE_STATS": "false",
-                        # Theme configuration (ensures theme works in cloud deployment)
-                        "STREAMLIT_THEME_BASE": "dark",
-                        "STREAMLIT_THEME_PRIMARY_COLOR": "#4da6ff", 
-                        "STREAMLIT_THEME_BACKGROUND_COLOR": "#1a1a1a",
-                        "STREAMLIT_THEME_SECONDARY_BACKGROUND_COLOR": "#262626",
-                        "STREAMLIT_THEME_TEXT_COLOR": "#d9d9d9",
-                        "STREAMLIT_THEME_FONT": "sans serif",
                         # AWS service configurations
                         "COGNITO_USER_POOL_ID": user_pool.user_pool_id,
                         "COGNITO_CLIENT_ID": user_pool_client.user_pool_client_id,
