@@ -22,13 +22,18 @@ try:
     from dotenv import load_dotenv
     import os.path
     
-    if os.path.exists('.env'):
-        load_dotenv()  # Load environment variables from .env file if it exists
-        print("✅ Loaded environment variables from .env file")
-    else:
-        print("ℹ️  No .env file found, using system environment variables")
+    # Only load environment variables once per session to avoid repeated loading
+    if 'env_loaded' not in st.session_state:
+        if os.path.exists('.env'):
+            load_dotenv()  # Load environment variables from .env file if it exists
+            print("✅ Loaded environment variables from .env file")
+        else:
+            print("ℹ️  No .env file found, using system environment variables")
+        st.session_state['env_loaded'] = True
 except ImportError:
-    print("ℹ️  python-dotenv not installed, using system environment variables")
+    if 'env_loaded' not in st.session_state:
+        print("ℹ️  python-dotenv not installed, using system environment variables")
+        st.session_state['env_loaded'] = True
 
 # AWS Cognito configuration - these will come from CDK outputs
 COGNITO_USER_POOL_ID = os.environ.get('COGNITO_USER_POOL_ID')
@@ -246,21 +251,29 @@ def load_projects():
 # Beautification: Custom theme and page config
 st.set_page_config(
     page_title="Cooling Load Estimator",
-    page_icon="❄️",
+    page_icon="assets/favicon.jpg",  # Use actual logo instead of emoji
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# Add custom HTML meta tags for social media sharing
+# Add custom HTML meta tags for social media sharing with logo
 st.html("""
+<link rel="icon" type="image/png" href="assets/Cooling Load Estimator Logo.png">
+<link rel="apple-touch-icon" href="assets/Cooling Load Estimator Logo.png">
 <meta property="og:title" content="Cooling Load Estimator" />
 <meta property="og:description" content="Professional HVAC cooling load calculator. Calculate tonnage, occupancy, and electrical loads for various building types." />
 <meta property="og:type" content="website" />
 <meta property="og:url" content="https://loadestimator.com" />
 <meta property="og:site_name" content="Load Estimator" />
-<meta name="twitter:card" content="summary" />
+<meta property="og:image" content="https://loadestimator.com/assets/Cooling Load Estimator Logo.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="Cooling Load Estimator - Professional HVAC Calculator" />
+<meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="Cooling Load Estimator" />
 <meta name="twitter:description" content="Professional HVAC cooling load calculator based. Calculate tonnage, occupancy, and electrical loads for various building types." />
+<meta name="twitter:image" content="https://loadestimator.com/assets/Cooling Load Estimator Logo.png" />
+<meta name="twitter:image:alt" content="Cooling Load Estimator - Professional HVAC Calculator" />
 <meta name="description" content="Professional HVAC cooling load calculator based on category and square footage. Calculate tonnage, occupancy, and electrical loads for various building types." />
 <meta name="author" content="Load Estimator" />
 """)
@@ -577,22 +590,27 @@ if st.session_state.get('project_loaded') and st.session_state.get('need_widget_
     
     st.session_state['need_widget_reset'] = False
 
-# Set defaults based on loaded project or use defaults
-if st.session_state.get('project_loaded'):
-    default_selected = st.session_state.get('loaded_selected_blds', ["Office Buildings (General)"])
-    default_sq_ft = st.session_state.get('loaded_sq_ft', 7500)
-else:
-    default_selected = ["Office Buildings (General)"] if "Office Buildings (General)" in building_types else ([building_types[0]] if building_types else [])
-    default_sq_ft = 7500
+# Initialize session state for widgets if not present (to avoid default parameter conflicts)
+if 'selected_buildings' not in st.session_state:
+    if st.session_state.get('project_loaded'):
+        st.session_state['selected_buildings'] = st.session_state.get('loaded_selected_blds', ["Office Buildings (General)"])
+    else:
+        st.session_state['selected_buildings'] = ["Office Buildings (General)"] if "Office Buildings (General)" in building_types else ([building_types[0]] if building_types else [])
 
+if 'square_footage' not in st.session_state:
+    if st.session_state.get('project_loaded'):
+        st.session_state['square_footage'] = st.session_state.get('loaded_sq_ft', 7500)
+    else:
+        st.session_state['square_footage'] = 7500
+
+# Create widgets using session state only (no default parameters)
 selected_blds = st.sidebar.multiselect(
     "Building Types (select multiple to compare)",
     building_types,
-    default=default_selected,
     key="selected_buildings"
 )
 
-sq_ft: int = st.sidebar.number_input("Building Area (sq ft)", min_value=0, value=default_sq_ft, step=1, format="%i", key="square_footage")
+sq_ft: int = st.sidebar.number_input("Building Area (sq ft)", min_value=0, step=1, format="%i", key="square_footage")
 
 # We'll add project management controls after calculations are done
 
@@ -833,7 +851,15 @@ if st.session_state.get('project_loaded') and st.session_state.get('loaded_proje
             if 'square_footage' in st.session_state:
                 del st.session_state['square_footage']
             st.rerun()
-st.title("Cooling Load Estimator")
+
+# Professional branded header with logo
+col1, col2 = st.columns([1, 7])
+with col1:
+    st.image("assets/favicon.jpg", width=150)
+with col2:
+    st.title("Cooling Load Estimator")
+    st.caption("Professional HVAC cooling load calculator based on ASHRAE standards")
+
 # Handle "Save As" dialog in main area with better styling (only for authenticated users)
 if st.session_state.get('show_save_as_main') and st.session_state.get('access_token'):
     st.markdown("---")
@@ -1092,7 +1118,7 @@ with st.sidebar:
         # Project controls moved to top of sidebar and main area for better UX
 
         st.divider()
-        st.subheader("📁 Your Projects")
+        st.title("📁 Your Projects")
         
         # Load and display user projects
         projects = load_projects()
