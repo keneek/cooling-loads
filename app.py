@@ -102,22 +102,92 @@ def sign_in(username, password):
     except ClientError as e:
         return False, str(e)
 
-def save_project(project_name, results):
+def save_project(project_name, range_results, selected_building_types, current_building_type, square_footage):
     if 'access_token' not in st.session_state:
         return False, "Please log in to save projects"
 
     try:
+        now = datetime.now().isoformat()
+        project_config = ProjectConfig(
+            project_name=project_name,
+            selected_building_types=selected_building_types,
+            current_building_type=current_building_type,
+            square_footage=square_footage,
+            range_results=range_results,
+            created_at=now,
+            updated_at=now
+        )
+        
         table.put_item(
             Item={
                 'username': st.session_state['username'],
                 'project_name': project_name,
-                'results': json.dumps(results.dict()),
-                'created_at': datetime.now().isoformat()
+                'config': json.dumps(project_config.dict()),
+                'created_at': now,
+                'updated_at': now
             }
         )
         return True, "Project saved!"
     except ClientError as e:
         return False, str(e)
+
+def load_project_config(project_name):
+    """Load and restore a project configuration"""
+    if 'access_token' not in st.session_state:
+        return False, "Please log in to load projects"
+    
+    try:
+        response = table.get_item(
+            Key={
+                'username': st.session_state['username'],
+                'project_name': project_name
+            }
+        )
+        
+        if 'Item' in response:
+            config_data = json.loads(response['Item']['config'])
+            project_config = ProjectConfig(**config_data)
+            
+            # Restore session state
+            st.session_state['loaded_selected_blds'] = project_config.selected_building_types
+            st.session_state['loaded_current_bld'] = project_config.current_building_type
+            st.session_state['loaded_sq_ft'] = project_config.square_footage
+            st.session_state['project_loaded'] = True
+            st.session_state['loaded_project_name'] = project_name
+            
+            return True, f"Project '{project_name}' loaded successfully!"
+        else:
+            return False, "Project not found"
+            
+    except ClientError as e:
+        return False, str(e)
+
+def delete_project(project_name):
+    """Delete a project"""
+    if 'access_token' not in st.session_state:
+        return False, "Please log in to delete projects"
+    
+    try:
+        # Debug: Show what we're trying to delete
+        username = st.session_state['username']
+        print(f"Attempting to delete project: {project_name} for user: {username}")
+        
+        response = table.delete_item(
+            Key={
+                'username': username,
+                'project_name': project_name
+            }
+        )
+        
+        # Debug: Show response
+        print(f"Delete response: {response}")
+        return True, f"Project '{project_name}' deleted successfully!"
+    except ClientError as e:
+        print(f"Delete error: {str(e)}")
+        return False, str(e)
+    except Exception as e:
+        print(f"Unexpected delete error: {str(e)}")
+        return False, f"Unexpected error: {str(e)}"
 
 def load_projects():
     if 'access_token' not in st.session_state:
@@ -142,15 +212,15 @@ st.set_page_config(
 
 # Add custom HTML meta tags for social media sharing
 st.html("""
-<meta property="og:title" content="Cooling Load Estimator - ASHRAE Standards" />
-<meta property="og:description" content="Professional HVAC cooling load calculator based on ASHRAE standards. Calculate tonnage, occupancy, and electrical loads for various building types." />
+<meta property="og:title" content="Cooling Load Estimator" />
+<meta property="og:description" content="Professional HVAC cooling load calculator. Calculate tonnage, occupancy, and electrical loads for various building types." />
 <meta property="og:type" content="website" />
 <meta property="og:url" content="https://loadestimator.com" />
 <meta property="og:site_name" content="Load Estimator" />
 <meta name="twitter:card" content="summary" />
-<meta name="twitter:title" content="Cooling Load Estimator - ASHRAE Standards" />
-<meta name="twitter:description" content="Professional HVAC cooling load calculator based on ASHRAE standards. Calculate tonnage, occupancy, and electrical loads for various building types." />
-<meta name="description" content="Professional HVAC cooling load calculator based on ASHRAE standards. Calculate tonnage, occupancy, and electrical loads for various building types." />
+<meta name="twitter:title" content="Cooling Load Estimator" />
+<meta name="twitter:description" content="Professional HVAC cooling load calculator based. Calculate tonnage, occupancy, and electrical loads for various building types." />
+<meta name="description" content="Professional HVAC cooling load calculator based on category and square footage. Calculate tonnage, occupancy, and electrical loads for various building types." />
 <meta name="author" content="Load Estimator" />
 """)
 
@@ -338,6 +408,17 @@ class RangeResults(BaseModel):
     avg: Results
     high: Results
 
+class ProjectConfig(BaseModel):
+    """Complete project configuration model"""
+    
+    project_name: str
+    selected_building_types: List[str]
+    current_building_type: str
+    square_footage: int
+    range_results: RangeResults
+    created_at: str
+    updated_at: str
+
 
 # Load and validate data
 data_path: str = 'ashrae_data.csv'
@@ -362,6 +443,16 @@ building_types = [b.building_type for b in validated_data]
 # Initialize session state
 if 'selected_bld' not in st.session_state:
     st.session_state.selected_bld = None
+if 'project_loaded' not in st.session_state:
+    st.session_state['project_loaded'] = False
+if 'loaded_selected_blds' not in st.session_state:
+    st.session_state['loaded_selected_blds'] = []
+if 'loaded_current_bld' not in st.session_state:
+    st.session_state['loaded_current_bld'] = None
+if 'loaded_sq_ft' not in st.session_state:
+    st.session_state['loaded_sq_ft'] = 7500
+if 'loaded_project_name' not in st.session_state:
+    st.session_state['loaded_project_name'] = None
 
 # Remove zone-related state
 
@@ -370,14 +461,40 @@ if 'selected_bld' not in st.session_state:
 # Sidebar
 st.sidebar.title("Input Parameters")
 
-# Multi-select for building types
+# Multi-select for building types - use loaded values if project was loaded
+if st.session_state.get('project_loaded'):
+    default_selected = st.session_state['loaded_selected_blds']
+    default_sq_ft = st.session_state['loaded_sq_ft']
+    # Show loaded project indicator
+    st.sidebar.success(f"📂 Loaded: {st.session_state['loaded_project_name']}")
+    if st.sidebar.button("✖️ Clear Loaded Project", use_container_width=True):
+        st.session_state['project_loaded'] = False
+        st.session_state['loaded_project_name'] = None
+        st.rerun()
+else:
+    default_selected = ["Office Buildings (General)"] if "Office Buildings (General)" in building_types else ([building_types[0]] if building_types else [])
+    default_sq_ft = 7500
+
 selected_blds = st.sidebar.multiselect(
     "Building Types (select multiple to compare)",
     building_types,
-    default=["Office Buildings (General)"] if "Office Buildings (General)" in building_types else ([building_types[0]] if building_types else [])
+    default=default_selected,
+    key="selected_buildings"
 )
 
-sq_ft: int = st.sidebar.number_input("Building Area (sq ft)", min_value=0, value=7500, step=1, format="%i")
+sq_ft: int = st.sidebar.number_input("Building Area (sq ft)", min_value=0, value=default_sq_ft, step=1, format="%i", key="square_footage")
+
+# Clear loaded project state if user manually changes inputs after initial load
+if st.session_state.get('project_loaded'):
+    # Check if this is the first render after loading (values match exactly)
+    if (selected_blds == st.session_state['loaded_selected_blds'] and 
+        sq_ft == st.session_state['loaded_sq_ft']):
+        # First render after load - values match, keep the indicator for this render
+        pass
+    else:
+        # User has modified the inputs - clear the loaded state
+        st.session_state['project_loaded'] = False
+        st.session_state['loaded_project_name'] = None
 
 # CSV override
 uploaded = st.sidebar.file_uploader("Upload Custom CSV", type="csv")
@@ -450,10 +567,16 @@ def compute_range_results(
 # Compute for single (first) selection for main display
 range_results = None
 if len(selected_blds) > 1:
+    # If project was loaded, try to select the loaded current building
+    if st.session_state.get('project_loaded') and st.session_state['loaded_current_bld'] in selected_blds:
+        default_index = selected_blds.index(st.session_state['loaded_current_bld'])
+    else:
+        default_index = 0
+    
     chosen_bld = st.selectbox(
         "Show details for",
         selected_blds,
-        index=0 if selected_blds else None
+        index=default_index if selected_blds else None
     )
 else:
     chosen_bld = selected_blds[0] if selected_blds else None
@@ -532,7 +655,7 @@ else:
             pdf = FPDF()  # type: ignore
             pdf.add_page()
             pdf.set_font('Arial', 'B', 12)
-            pdf.cell(0, 10, 'ASHRAE Cooling Load Report', ln=1)
+            pdf.cell(0, 10, 'Cooling Load Estimator Report', ln=1)
             pdf.set_font('Arial', '', 10)
             pdf.cell(0, 10, f'Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}', ln=1)
             pdf.cell(0, 10, f'Building: {building_type}, Area: {sq_ft} sq ft', ln=1)
@@ -558,7 +681,7 @@ else:
             pdf.cell(0, 10, f'Refrigeration Rate: {params.refrig} ft²/ton', ln=1)
             pdf.cell(0, 10, f'Occupancy Rate: {params.occupancy} ft²/person', ln=1)
             pdf.cell(0, 10, f'Plug/Light Rate: {params.electrical} W/ft²', ln=1)
-            pdf.cell(0, 10, 'Note: Electrical values are for HVAC heat gain assumptions per ASHRAE.', ln=1)
+            pdf.cell(0, 10, 'Note: Electrical values are estimated plug load and other equipment for HVAC heat gain assumptions.', ln=1)
             return pdf  # type: ignore
 
         pdf = create_pdf(range_results, chosen_bld, sq_ft)  # type: ignore
@@ -643,8 +766,94 @@ with st.sidebar:
         projects = load_projects()
         if projects:
             for project in projects:
-                if st.button(f"📊 {project['project_name']}", use_container_width=True):
-                    st.json(json.loads(project['results']))
+                # Parse project config for preview
+                try:
+                    project_name = project['project_name']
+                    created_date = project.get('created_at', 'Unknown date')[:10] if project.get('created_at') else 'Unknown date'
+                    
+                    # Check if this is new format (has 'config') or old format (has 'results')
+                    if 'config' in project:
+                        # New format with full config
+                        config_data = json.loads(project['config'])
+                        building_type = config_data.get('current_building_type', 'Unknown')
+                        sq_ft = config_data.get('square_footage', 0)
+                        avg_tonnage = config_data['range_results']['avg']['tonnage']
+                        preview_text = f"📅 {created_date}"
+                        detail_text = f"{building_type} • {sq_ft:,} sq ft • {avg_tonnage:.1f} tons"
+                        is_legacy = False
+                    elif 'results' in project:
+                        # Old format - extract from results
+                        results_data = json.loads(project['results'])
+                        tonnage = results_data.get('tonnage', 0)
+                        occupancy = results_data.get('total_occupancy', 0)
+                        electrical = results_data.get('electrical_kw', 0)
+                        preview_text = f"📅 {created_date} • Legacy Format"
+                        detail_text = f"{tonnage:.1f} tons • {occupancy:.0f} people • {electrical:.1f} kW"
+                        is_legacy = True
+                    else:
+                        preview_text = "Invalid project data"
+                        detail_text = ""
+                        is_legacy = False
+                        
+                except (json.JSONDecodeError, KeyError, TypeError) as e:
+                    created_date = project.get('created_at', 'Unknown date')[:10] if project.get('created_at') else 'Unknown date'
+                    preview_text = f"📅 {created_date} • Error loading project"
+                    detail_text = "Unable to parse project data"
+                    is_legacy = False
+                
+                # Project container
+                with st.container():
+                    st.markdown(f"**📊 {project_name}**")
+                    st.caption(preview_text)
+                    if detail_text:
+                        st.markdown(f"*{detail_text}*")
+                    
+                    # Action buttons - Load and Delete only (removed View)
+                    col1, col2 = st.columns([1, 1])
+                    with col1:
+                        # Disable load for legacy projects since they don't have full config
+                        load_disabled = is_legacy
+                        load_help = "⚠️ Cannot load legacy projects (missing configuration data)" if is_legacy else None
+                        
+                        if st.button("📂 Load", key=f"load_{project_name}", use_container_width=True, 
+                                   type="primary", disabled=load_disabled, help=load_help):
+                            success, message = load_project_config(project_name)
+                            if success:
+                                st.success(message)
+                                st.rerun()
+                            else:
+                                st.error(f"❌ {message}")
+                    with col2:
+                        # Check if this project is in confirmation state
+                        confirm_key = f'confirm_delete_{project_name}'
+                        if st.session_state.get(confirm_key, False):
+                            # Show confirmation buttons
+                            subcol1, subcol2 = st.columns([1, 1])
+                            with subcol1:
+                                if st.button("✅ Yes", key=f"confirm_yes_{project_name}", use_container_width=True, type="primary"):
+                                    success, message = delete_project(project_name)
+                                    st.session_state[confirm_key] = False  # Clear confirmation state
+                                    if success:
+                                        st.success(message)
+                                        st.rerun()
+                                    else:
+                                        st.error(f"❌ {message}")
+                            with subcol2:
+                                if st.button("❌ No", key=f"confirm_no_{project_name}", use_container_width=True):
+                                    st.session_state[confirm_key] = False
+                                    st.rerun()
+                        else:
+                            # Show delete button
+                            if st.button("🗑️ Delete", key=f"delete_{project_name}", use_container_width=True):
+                                # Clear any other confirmations and set this one
+                                for other_project in projects:
+                                    other_confirm_key = f'confirm_delete_{other_project["project_name"]}'
+                                    if other_confirm_key != confirm_key:
+                                        st.session_state[other_confirm_key] = False
+                                st.session_state[confirm_key] = True
+                                st.rerun()
+                    
+                    st.divider()
         else:
             st.info("💡 No saved projects yet")
     
@@ -782,8 +991,8 @@ if range_results:
             save_clicked = st.button("💾 Save", use_container_width=True, type="primary")
         
         if save_clicked and project_name:
-            # Save the average results as the main result, but include range info
-            success, message = save_project(project_name, range_results.avg)
+            # Save the complete project configuration including range results
+            success, message = save_project(project_name, range_results, selected_blds, chosen_bld, sq_ft)
             if success:
                 st.success(f"✅ {message}")
                 # Update sidebar projects (force refresh)
