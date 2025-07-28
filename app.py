@@ -174,16 +174,15 @@ def load_project_config(project_name):
             config_data = json.loads(response['Item']['config'])
             project_config = ProjectConfig(**config_data)
             
-            # Restore session state and widget states
+            # Restore session state (but NOT widget states - that causes Streamlit errors)
             st.session_state['loaded_selected_blds'] = project_config.selected_building_types
             st.session_state['loaded_current_bld'] = project_config.current_building_type
             st.session_state['loaded_sq_ft'] = project_config.square_footage
             st.session_state['project_loaded'] = True
             st.session_state['loaded_project_name'] = project_name
             
-            # Set widget states directly
-            st.session_state['selected_buildings'] = project_config.selected_building_types
-            st.session_state['square_footage'] = project_config.square_footage
+            # Flag for rerun to reset widgets properly
+            st.session_state['need_widget_reset'] = True
             
             return True, f"Project '{project_name}' loaded successfully!"
         else:
@@ -493,8 +492,22 @@ if 'show_save_as_new' not in st.session_state:
 # Sidebar
 st.sidebar.title("Input Parameters")
 
-# Multi-select for building types - properly handle state
-default_selected = ["Office Buildings (General)"] if "Office Buildings (General)" in building_types else ([building_types[0]] if building_types else [])
+# Multi-select for building types - handle loaded project state properly
+if st.session_state.get('project_loaded') and st.session_state.get('need_widget_reset'):
+    # Clear existing widget states to allow reset
+    if 'selected_buildings' in st.session_state:
+        del st.session_state['selected_buildings']
+    if 'square_footage' in st.session_state:
+        del st.session_state['square_footage']
+    st.session_state['need_widget_reset'] = False
+
+# Set defaults based on loaded project or use defaults
+if st.session_state.get('project_loaded'):
+    default_selected = st.session_state.get('loaded_selected_blds', ["Office Buildings (General)"])
+    default_sq_ft = st.session_state.get('loaded_sq_ft', 7500)
+else:
+    default_selected = ["Office Buildings (General)"] if "Office Buildings (General)" in building_types else ([building_types[0]] if building_types else [])
+    default_sq_ft = 7500
 
 selected_blds = st.sidebar.multiselect(
     "Building Types (select multiple to compare)",
@@ -503,8 +516,6 @@ selected_blds = st.sidebar.multiselect(
     key="selected_buildings"
 )
 
-# Handle square footage with proper state management
-default_sq_ft = 7500
 sq_ft: int = st.sidebar.number_input("Building Area (sq ft)", min_value=0, value=default_sq_ft, step=1, format="%i", key="square_footage")
 
 # We'll add project management controls after calculations are done
@@ -1024,9 +1035,11 @@ with st.sidebar:
             if st.button("✖️ Clear Loaded Project", use_container_width=True):
                 st.session_state['project_loaded'] = False
                 st.session_state['loaded_project_name'] = None
-                # Reset widget states to defaults
-                st.session_state['selected_buildings'] = ["Office Buildings (General)"] if "Office Buildings (General)" in building_types else ([building_types[0]] if building_types else [])
-                st.session_state['square_footage'] = 7500
+                # Clear widget states properly (don't set directly - causes Streamlit errors)
+                if 'selected_buildings' in st.session_state:
+                    del st.session_state['selected_buildings']
+                if 'square_footage' in st.session_state:
+                    del st.session_state['square_footage']
                 st.rerun()
         
         else:
