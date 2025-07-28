@@ -168,15 +168,26 @@ def delete_project(project_name):
         return False, "Please log in to delete projects"
     
     try:
-        table.delete_item(
+        # Debug: Show what we're trying to delete
+        username = st.session_state['username']
+        print(f"Attempting to delete project: {project_name} for user: {username}")
+        
+        response = table.delete_item(
             Key={
-                'username': st.session_state['username'],
+                'username': username,
                 'project_name': project_name
             }
         )
+        
+        # Debug: Show response
+        print(f"Delete response: {response}")
         return True, f"Project '{project_name}' deleted successfully!"
     except ClientError as e:
+        print(f"Delete error: {str(e)}")
         return False, str(e)
+    except Exception as e:
+        print(f"Unexpected delete error: {str(e)}")
+        return False, f"Unexpected error: {str(e)}"
 
 def load_projects():
     if 'access_token' not in st.session_state:
@@ -813,25 +824,34 @@ with st.sidebar:
                             else:
                                 st.error(f"❌ {message}")
                     with col2:
-                        if st.button("🗑️ Delete", key=f"delete_{project_name}", use_container_width=True):
-                            # Confirm deletion
-                            if st.session_state.get(f'confirm_delete_{project_name}'):
-                                success, message = delete_project(project_name)
-                                if success:
-                                    st.success(message)
-                                    st.session_state[f'confirm_delete_{project_name}'] = False
+                        # Check if this project is in confirmation state
+                        confirm_key = f'confirm_delete_{project_name}'
+                        if st.session_state.get(confirm_key, False):
+                            # Show confirmation buttons
+                            subcol1, subcol2 = st.columns([1, 1])
+                            with subcol1:
+                                if st.button("✅ Yes", key=f"confirm_yes_{project_name}", use_container_width=True, type="primary"):
+                                    success, message = delete_project(project_name)
+                                    st.session_state[confirm_key] = False  # Clear confirmation state
+                                    if success:
+                                        st.success(message)
+                                        st.rerun()
+                                    else:
+                                        st.error(f"❌ {message}")
+                            with subcol2:
+                                if st.button("❌ No", key=f"confirm_no_{project_name}", use_container_width=True):
+                                    st.session_state[confirm_key] = False
                                     st.rerun()
-                                else:
-                                    st.error(f"❌ {message}")
-                            else:
-                                st.session_state[f'confirm_delete_{project_name}'] = True
-                                st.warning("⚠️ Click Delete again to confirm")
-                    
-                    # Reset confirmation if another project is clicked
-                    for other_project in projects:
-                        if other_project['project_name'] != project_name:
-                            if st.session_state.get(f'confirm_delete_{other_project["project_name"]}'):
-                                st.session_state[f'confirm_delete_{other_project["project_name"]}'] = False
+                        else:
+                            # Show delete button
+                            if st.button("🗑️ Delete", key=f"delete_{project_name}", use_container_width=True):
+                                # Clear any other confirmations and set this one
+                                for other_project in projects:
+                                    other_confirm_key = f'confirm_delete_{other_project["project_name"]}'
+                                    if other_confirm_key != confirm_key:
+                                        st.session_state[other_confirm_key] = False
+                                st.session_state[confirm_key] = True
+                                st.rerun()
                     
                     st.divider()
         else:
