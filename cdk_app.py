@@ -95,12 +95,13 @@ class StreamlitStack(cdk.Stack):
                 task_image_options=ecs_patterns.ApplicationLoadBalancedTaskImageOptions(
                     image=ecs.ContainerImage.from_asset("."),
                     container_port=8501,
-                    # Add environment variables for better configuration
+                    # Add environment variables for configuration
                     environment={
                         "STREAMLIT_SERVER_PORT": "8501",
                         "STREAMLIT_SERVER_ADDRESS": "0.0.0.0",
                         "STREAMLIT_SERVER_HEADLESS": "true",
                         "STREAMLIT_BROWSER_GATHER_USAGE_STATS": "false",
+                        # AWS service configurations
                         "COGNITO_USER_POOL_ID": user_pool.user_pool_id,
                         "COGNITO_CLIENT_ID": user_pool_client.user_pool_client_id,
                         "DYNAMODB_TABLE_NAME": project_table.table_name,

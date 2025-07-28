@@ -19,10 +19,17 @@ RUN poetry install --only main
 
 # Copy application files
 COPY app.py ashrae_data.csv ./
-COPY .streamlit .streamlit
+
+# Copy assets folder for logo and other static files
+COPY assets/ assets/
+
+# Copy Streamlit configuration
+COPY .streamlit/ .streamlit/
 
 # Create non-root user for security
-RUN useradd --create-home --shell /bin/bash app && chown -R app:app /app
+RUN useradd --create-home --shell /bin/bash app
+# Ensure all files have correct permissions before switching user
+RUN chown -R app:app /app
 USER app
 
 # Health check
@@ -31,4 +38,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
 
 EXPOSE 8501
 
-CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.headless=true"] 
+CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.headless=true", "--server.enableCORS=false", "--server.enableXsrfProtection=false", "--global.developmentMode=false"] 
