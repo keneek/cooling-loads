@@ -107,14 +107,37 @@ def save_project(project_name, range_results, selected_building_types, current_b
         return False, "Please log in to save projects"
 
     try:
+        # Check if this is an update to an existing project
+        is_update = False
+        created_at = datetime.now().isoformat()
+        
+        # Try to get existing project to preserve creation date
+        try:
+            response = table.get_item(
+                Key={
+                    'username': st.session_state['username'],
+                    'project_name': project_name
+                }
+            )
+            if 'Item' in response:
+                existing_config = json.loads(response['Item']['config'])
+                created_at = existing_config.get('created_at', created_at)
+                is_update = True
+        except:
+            pass  # If we can't get existing project, treat as new
+        
         now = datetime.now().isoformat()
+        
+        # Debug: Print the square footage being saved
+        print(f"DEBUG save_project: square_footage = {square_footage}")
+        
         project_config = ProjectConfig(
             project_name=project_name,
             selected_building_types=selected_building_types,
             current_building_type=current_building_type,
             square_footage=square_footage,
             range_results=range_results,
-            created_at=now,
+            created_at=created_at,
             updated_at=now
         )
         
@@ -123,11 +146,13 @@ def save_project(project_name, range_results, selected_building_types, current_b
                 'username': st.session_state['username'],
                 'project_name': project_name,
                 'config': json.dumps(project_config.dict()),
-                'created_at': now,
+                'created_at': created_at,
                 'updated_at': now
             }
         )
-        return True, "Project saved!"
+        
+        action = "updated" if is_update else "saved"
+        return True, f"Project {action}!"
     except ClientError as e:
         return False, str(e)
 
@@ -453,6 +478,8 @@ if 'loaded_sq_ft' not in st.session_state:
     st.session_state['loaded_sq_ft'] = 7500
 if 'loaded_project_name' not in st.session_state:
     st.session_state['loaded_project_name'] = None
+if 'show_save_as_new' not in st.session_state:
+    st.session_state['show_save_as_new'] = False
 
 # Remove zone-related state
 
@@ -976,31 +1003,87 @@ if st.session_state.get('show_auth_form') and st.session_state.get('auth_source'
     
     st.divider()
 
-# === PROJECT SAVING (MAIN AREA) ===
+# === PROJECT SAVING/UPDATING (MAIN AREA) ===
 if range_results:
-    st.subheader("💾 Save Project")
-    
     # Check if user is logged in
     if st.session_state.get('access_token'):
-        # User is logged in - show save form
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            project_name = st.text_input("Project Name", placeholder="Enter a name for this project...")
-        with col2:
-            st.write("")  # Spacing
-            save_clicked = st.button("💾 Save", use_container_width=True, type="primary")
-        
-        if save_clicked and project_name:
-            # Save the complete project configuration including range results
-            success, message = save_project(project_name, range_results, selected_blds, chosen_bld, sq_ft)
-            if success:
-                st.success(f"✅ {message}")
-                # Update sidebar projects (force refresh)
+        # Check if a project is currently loaded
+        if st.session_state.get('project_loaded') and st.session_state.get('loaded_project_name'):
+            # Project is loaded - show update section
+            st.subheader("📝 Update Project")
+            loaded_project = st.session_state['loaded_project_name']
+            st.info(f"📂 Currently editing: **{loaded_project}**")
+            
+            col1, col2 = st.columns([1, 1])
+            with col1:
+                update_clicked = st.button("📝 Update Project", use_container_width=True, type="primary")
+            with col2:
+                save_as_new_clicked = st.button("💾 Save as New", use_container_width=True)
+            
+            if update_clicked:
+                # Update the existing project
+                success, message = save_project(loaded_project, range_results, selected_blds, chosen_bld, sq_ft)
+                if success:
+                    st.success(f"✅ Project '{loaded_project}' updated successfully!")
+                    st.rerun()
+                else:
+                    st.error(f"❌ {message}")
+            
+            elif save_as_new_clicked:
+                # Show input for new project name
+                st.session_state['show_save_as_new'] = True
                 st.rerun()
-            else:
-                st.error(f"❌ {message}")
-        elif save_clicked and not project_name:
-            st.warning("⚠️ Please enter a project name")
+        
+        else:
+            # No project loaded - show normal save form
+            st.subheader("💾 Save Project")
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                project_name = st.text_input("Project Name", placeholder="Enter a name for this project...")
+            with col2:
+                st.write("")  # Spacing
+                save_clicked = st.button("💾 Save", use_container_width=True, type="primary")
+            
+            if save_clicked and project_name:
+                # Debug: Print the actual values being saved
+                print(f"DEBUG: Saving project with sq_ft = {sq_ft}")
+                print(f"DEBUG: selected_blds = {selected_blds}")
+                print(f"DEBUG: chosen_bld = {chosen_bld}")
+                
+                # Save the complete project configuration including range results
+                success, message = save_project(project_name, range_results, selected_blds, chosen_bld, sq_ft)
+                if success:
+                    st.success(f"✅ {message}")
+                    # Update sidebar projects (force refresh)
+                    st.rerun()
+                else:
+                    st.error(f"❌ {message}")
+            elif save_clicked and not project_name:
+                st.warning("⚠️ Please enter a project name")
+        
+        # Handle "Save as New" dialog
+        if st.session_state.get('show_save_as_new'):
+            st.divider()
+            st.subheader("💾 Save as New Project")
+            new_project_name = st.text_input("New Project Name", placeholder="Enter a name for the new project...")
+            
+            col1, col2 = st.columns([1, 1])
+            with col1:
+                if st.button("💾 Save New", use_container_width=True, type="primary"):
+                    if new_project_name:
+                        success, message = save_project(new_project_name, range_results, selected_blds, chosen_bld, sq_ft)
+                        if success:
+                            st.success(f"✅ New project '{new_project_name}' saved!")
+                            st.session_state['show_save_as_new'] = False
+                            st.rerun()
+                        else:
+                            st.error(f"❌ {message}")
+                    else:
+                        st.warning("⚠️ Please enter a project name")
+            with col2:
+                if st.button("❌ Cancel", use_container_width=True):
+                    st.session_state['show_save_as_new'] = False
+                    st.rerun()
     
     else:
         # User not logged in - show sign-in prompt

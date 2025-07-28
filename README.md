@@ -495,6 +495,9 @@ If Route53 nameservers change, update GoDaddy:
 - [ ] Project export/import functionality
 - [ ] Advanced project filtering and search
 - [ ] Project templates and presets
+- [ ] Project history and version tracking
+- [ ] Save and manage PDF reports for each project
+- [ ] Project collaboration and sharing features
 
 ## 🤝 Contributing
 
