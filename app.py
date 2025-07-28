@@ -139,6 +139,121 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# Add mobile-responsive CSS
+st.markdown("""
+<style>
+    /* Mobile-responsive improvements */
+    @media (max-width: 768px) {
+        /* Improve sidebar width on mobile */
+        section[data-testid="stSidebar"] {
+            width: 85% !important;
+            max-width: 350px !important;
+        }
+        
+        /* Larger touch targets for mobile */
+        button[kind="primary"], button[kind="secondary"] {
+            min-height: 48px !important;
+            font-size: 16px !important;
+            padding: 12px 24px !important;
+        }
+        
+        /* Better form input styling for mobile */
+        input[type="text"], input[type="password"], input[type="email"] {
+            font-size: 16px !important;
+            padding: 12px !important;
+            min-height: 48px !important;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+        }
+        
+        /* Improve tab navigation on mobile */
+        div[data-testid="stTabs"] button {
+            font-size: 16px !important;
+            padding: 10px 16px !important;
+            min-height: 44px !important;
+        }
+        
+        /* Better spacing for mobile forms */
+        div[data-testid="stForm"] {
+            padding: 16px !important;
+        }
+        
+        /* Ensure form submit buttons are full width on mobile */
+        div[data-testid="stForm"] button[type="submit"] {
+            width: 100% !important;
+            min-height: 48px !important;
+            font-size: 16px !important;
+            margin-top: 8px !important;
+        }
+        
+        /* Improve metric display on mobile */
+        div[data-testid="metric-container"] {
+            padding: 12px !important;
+        }
+        
+        /* Better button spacing */
+        div.stButton > button {
+            margin-bottom: 8px !important;
+        }
+    }
+    
+    /* General improvements for all devices */
+    /* Ensure inputs don't zoom on focus (iOS) */
+    input[type="text"], input[type="password"], input[type="email"] {
+        font-size: 16px !important;
+    }
+    
+    /* Improve form labels */
+    label {
+        font-size: 14px !important;
+        font-weight: 500 !important;
+        margin-bottom: 4px !important;
+    }
+    
+    /* Better error/success message styling */
+    div.stAlert {
+        padding: 12px 16px !important;
+        font-size: 14px !important;
+    }
+    
+    /* Additional mobile improvements */
+    @media (max-width: 768px) {
+        /* Make columns stack on mobile for auth buttons */
+        div[data-testid="column"] {
+            width: 100% !important;
+            flex: 100% !important;
+        }
+        
+        /* Add spacing between stacked buttons */
+        div[data-testid="column"]:not(:last-child) {
+            margin-bottom: 8px !important;
+        }
+        
+        /* Ensure forms are scrollable on small screens */
+        section[data-testid="stSidebar"] > div {
+            overflow-y: auto !important;
+            -webkit-overflow-scrolling: touch !important;
+        }
+    }
+    
+    /* Prevent text selection on buttons */
+    button {
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
+    }
+    
+    /* Improve focus states */
+    input:focus, button:focus {
+        outline: 2px solid #4da6ff !important;
+        outline-offset: 2px !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 # Removed dark mode toggle and custom CSS; using official theme from config.toml
 
 
@@ -413,12 +528,14 @@ with st.sidebar:
         st.session_state['username'] = None
     if 'show_auth_form' not in st.session_state:
         st.session_state['show_auth_form'] = False
+    if 'auth_source' not in st.session_state:
+        st.session_state['auth_source'] = None
     
     # User status and authentication
     if st.session_state.get('access_token'):
         # Logged in user UI
         st.success(f"👋 **{st.session_state['username']}**")
-        if st.button("🚪 Sign Out", use_container_width=True):
+        if st.button("🚪 Sign Out", use_container_width=True, type="primary"):
             st.session_state['access_token'] = None
             st.session_state['username'] = None
             st.session_state['show_auth_form'] = False
@@ -441,8 +558,9 @@ with st.sidebar:
         st.info("👤 **Guest Mode**")
         st.caption("Sign in to save and manage projects")
         
-        if st.button("🔑 Sign In / Sign Up", use_container_width=True):
+        if st.button("🔑 Sign In / Sign Up", use_container_width=True, type="primary"):
             st.session_state['show_auth_form'] = not st.session_state.get('show_auth_form', False)
+            st.session_state['auth_source'] = 'sidebar'
         
         # Authentication form (collapsible)
         if st.session_state.get('show_auth_form'):
@@ -451,14 +569,15 @@ with st.sidebar:
             
             with auth_tab1:
                 with st.form("signin_form"):
-                    username = st.text_input("Username")
-                    password = st.text_input("Password", type="password")
-                    signin_submitted = st.form_submit_button("Sign In", use_container_width=True)
+                    username = st.text_input("Username", placeholder="Enter your username")
+                    password = st.text_input("Password", type="password", placeholder="Enter your password")
+                    signin_submitted = st.form_submit_button("Sign In", use_container_width=True, type="primary")
                     
                     if signin_submitted and username and password:
                         success, message = sign_in(username, password)
                         if success:
                             st.session_state['show_auth_form'] = False
+                            st.session_state['auth_source'] = None
                             st.success("✅ Signed in!")
                             st.rerun()
                         else:
@@ -466,30 +585,92 @@ with st.sidebar:
             
             with auth_tab2:
                 with st.form("signup_form"):
-                    signup_username = st.text_input("Username", key="signup_user")
-                    signup_email = st.text_input("Email", key="signup_email")
-                    signup_password = st.text_input("Password", type="password", key="signup_pass")
-                    signup_submitted = st.form_submit_button("Sign Up", use_container_width=True)
+                    signup_username = st.text_input("Username", placeholder="Choose a username", key="signup_user")
+                    signup_email = st.text_input("Email", placeholder="your@email.com", key="signup_email")
+                    signup_password = st.text_input("Password", type="password", placeholder="Min 8 chars, 1 uppercase, 1 number", key="signup_pass")
+                    st.caption("Password must be at least 8 characters with 1 uppercase letter and 1 number")
+                    signup_submitted = st.form_submit_button("Sign Up", use_container_width=True, type="primary")
                     
                     if signup_submitted and signup_username and signup_email and signup_password:
                         success, message = sign_up(signup_username, signup_password, signup_email)
                         if success:
-                            st.success("✅ Account created! Check your email.")
+                            st.success("✅ Account created! Check your email for verification code.")
                         else:
                             st.error(f"❌ {message}")
             
             with auth_tab3:
                 with st.form("confirm_form"):
-                    confirm_username = st.text_input("Username", key="confirm_user")
-                    confirm_code = st.text_input("Confirmation Code", key="confirm_code")
-                    confirm_submitted = st.form_submit_button("Confirm", use_container_width=True)
+                    confirm_username = st.text_input("Username", placeholder="Your username", key="confirm_user")
+                    confirm_code = st.text_input("Verification Code", placeholder="Check your email", key="confirm_code")
+                    st.caption("Enter the 6-digit code from your email")
+                    confirm_submitted = st.form_submit_button("Confirm Account", use_container_width=True, type="primary")
                     
                     if confirm_submitted and confirm_username and confirm_code:
                         success, message = confirm_sign_up(confirm_username, confirm_code)
                         if success:
-                            st.success("✅ Account confirmed!")
+                            st.success("✅ Account confirmed! You can now sign in.")
                         else:
                             st.error(f"❌ {message}")
+
+# === AUTHENTICATION FORM IN MAIN AREA (for mobile) ===
+if st.session_state.get('show_auth_form') and st.session_state.get('auth_source') == 'main':
+    st.divider()
+    st.subheader("🔐 Authentication")
+    
+    # Show the auth form here for convenience
+    auth_tab1, auth_tab2, auth_tab3 = st.tabs(["Sign In", "Sign Up", "Confirm"])
+    
+    with auth_tab1:
+        with st.form("main_signin_form"):
+            username = st.text_input("Username", placeholder="Enter your username", key="main_username")
+            password = st.text_input("Password", type="password", placeholder="Enter your password", key="main_password")
+            signin_submitted = st.form_submit_button("Sign In", use_container_width=True, type="primary")
+            
+            if signin_submitted and username and password:
+                success, message = sign_in(username, password)
+                if success:
+                    st.session_state['show_auth_form'] = False
+                    st.session_state['auth_source'] = None
+                    st.success("✅ Signed in!")
+                    st.rerun()
+                else:
+                    st.error(f"❌ {message}")
+    
+    with auth_tab2:
+        with st.form("main_signup_form"):
+            signup_username = st.text_input("Username", placeholder="Choose a username", key="main_signup_user")
+            signup_email = st.text_input("Email", placeholder="your@email.com", key="main_signup_email")
+            signup_password = st.text_input("Password", type="password", placeholder="Min 8 chars, 1 uppercase, 1 number", key="main_signup_pass")
+            st.caption("Password must be at least 8 characters with 1 uppercase letter and 1 number")
+            signup_submitted = st.form_submit_button("Sign Up", use_container_width=True, type="primary")
+            
+            if signup_submitted and signup_username and signup_email and signup_password:
+                success, message = sign_up(signup_username, signup_password, signup_email)
+                if success:
+                    st.success("✅ Account created! Check your email for verification code.")
+                else:
+                    st.error(f"❌ {message}")
+    
+    with auth_tab3:
+        with st.form("main_confirm_form"):
+            confirm_username = st.text_input("Username", placeholder="Your username", key="main_confirm_user")
+            confirm_code = st.text_input("Verification Code", placeholder="Check your email", key="main_confirm_code")
+            st.caption("Enter the 6-digit code from your email")
+            confirm_submitted = st.form_submit_button("Confirm Account", use_container_width=True, type="primary")
+            
+            if confirm_submitted and confirm_username and confirm_code:
+                success, message = confirm_sign_up(confirm_username, confirm_code)
+                if success:
+                    st.success("✅ Account confirmed! You can now sign in.")
+                else:
+                    st.error(f"❌ {message}")
+    
+    if st.button("✖️ Cancel", use_container_width=True):
+        st.session_state['show_auth_form'] = False
+        st.session_state['auth_source'] = None
+        st.rerun()
+    
+    st.divider()
 
 # === PROJECT SAVING (MAIN AREA) ===
 if results:
@@ -523,8 +704,10 @@ if results:
         with col1:
             if st.button("🔑 Sign In", use_container_width=True, type="primary"):
                 st.session_state['show_auth_form'] = True
+                st.session_state['auth_source'] = 'main'
                 st.rerun()
         with col2:
             if st.button("📝 Sign Up", use_container_width=True):
                 st.session_state['show_auth_form'] = True
+                st.session_state['auth_source'] = 'main'
                 st.rerun()
