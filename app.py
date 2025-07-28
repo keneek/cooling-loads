@@ -1100,15 +1100,4 @@ with st.sidebar:
                     st.rerun()
 
     else:
-        st.info("🔐 Sign in to save projects")
-        col1, col2 = st.columns([1, 1])
-        with col1:
-            if st.button("🔑 Sign In", use_container_width=True, type="primary"):
-                st.session_state['show_auth_form'] = True
-                st.session_state['auth_source'] = 'main'
-                st.rerun()
-        with col2:
-            if st.button("📝 Sign Up", use_container_width=True):
-                st.session_state['show_auth_form'] = True
-                st.session_state['auth_source'] = 'main'
-                st.rerun()
+        st.info("🔐 Sign in above to save projects")
